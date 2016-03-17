@@ -34,7 +34,7 @@ loadImageValueData <- function(path, firstImageIndex) {
 }
 
 
-loadTempAndImageValue <- function(dir, imageValueFile, tempFile, firstImageIndex, startTempTime) {
+loadTempAndImageValue <- function(dir, imageValueFile, tempFile, firstImageIndex, startTempTime, probeROIs) {
     
     imageValuePath <- sprintf("%s/%s", dir, imageValueFile)
     tempPath <- sprintf("%s/%s", dir, tempFile)
@@ -68,10 +68,14 @@ loadTempAndImageValue <- function(dir, imageValueFile, tempFile, firstImageIndex
             Probe3Temp <- append(Probe3Temp, tempData$CHANNEL2[mask])
             Probe4Temp <- append(Probe4Temp, tempData$CHANNEL3[mask])
             Probe5Temp <- append(Probe5Temp, tempData$CHANNEL4[mask])
-            Probe1ImageValue <- append(Probe1ImageValue, imageValue$X1[idx])  # Probe 1 = ROI 1
-            Probe2ImageValue <- append(Probe2ImageValue, imageValue$X6[idx])  # Probe 2 = ROI 6
-            Probe3ImageValue <- append(Probe3ImageValue, imageValue$X14[idx]) # Probe 3 = ROI 14
-            Probe4ImageValue <- append(Probe4ImageValue, imageValue$X20[idx]) # Probe 4 = ROI 20
+            col <- sprintf("X%d", probeROIs[1])
+            Probe1ImageValue <- append(Probe1ImageValue, imageValue[idx, col])
+            col <- sprintf("X%d", probeROIs[2])
+            Probe2ImageValue <- append(Probe2ImageValue, imageValue[idx, col])
+            col <- sprintf("X%d", probeROIs[3])
+            Probe3ImageValue <- append(Probe3ImageValue, imageValue[idx, col])
+            col <- sprintf("X%d", probeROIs[4])
+            Probe4ImageValue <- append(Probe4ImageValue, imageValue[idx, col])
         }
     }
     result <- data.frame(Time, Probe1ImageValue, Probe2ImageValue, Probe3ImageValue, Probe4ImageValue, Probe1Temp, Probe2Temp, Probe3Temp, Probe4Temp, Probe5Temp)
@@ -103,29 +107,36 @@ meltTemp <- function(TempImageValue) {
     return(meltedTemp)
 }
 
+nlm_eqn <- function(df, f) {
+    m <- nlm(f, df)
+    eq <- substitute(italic(y) == b %.% italic(x)+a*","~~italic(r)^2~"="~r2, 
+                     list(a = format(coef(m)[1], digits = 2), 
+                          b = format(coef(m)[2], digits = 2), 
+                          r2 = format(summary(m)$r.squared, digits = 3)))
+    as.character(as.expression(eq))
+}
 
-analyzeImage <- function(path, sampledImageFile, tempFile, timeOffset) {
+lm_eqn <- function(df, f) {
+    m <- lm(f, df)
+    eq <- substitute(italic(y) == b %.% italic(x)+a*","~~italic(r)^2~"="~r2, 
+                     list(a = format(coef(m)[1], digits = 2), 
+                          b = format(coef(m)[2], digits = 2), 
+                          r2 = format(summary(m)$r.squared, digits = 3)))
+    as.character(as.expression(eq))
     
-    TempImageValue <- loadTempAndImageValue(path, sampledImageFile, tempFile, 3, timeOffset)
+}
+
+plotImageParameterVsTemperature <- function(path, sampledImageFile, tempFile, timeOffset, probeROIs, paramName="R2*", paramFileStr="R2s", paramUnit="s^-1", fitting="linear") {
+    
+    TempImageValue <- loadTempAndImageValue(path, sampledImageFile, tempFile, 3, timeOffset, probeROIs)
 
     meltedImageValue <- meltImageValue(TempImageValue)
     meltedTemp <- meltTemp(TempImageValue)
-    meltedData <- data.frame(Time=meltedImageValue$Time, Temp=meltedTemp$value, R2s=meltedImageValue$value, Probe=meltedTemp$variable)
-    
-    ## Plot: Temperature vs R2*
-    # Shape plot
-    #ggplot(data=meltedData, aes(x=Temp, y=R2s, group=Probe)) + ggtitle("Temperature vs R2*") + labs(x="Temperature (DegC)", y="R2* (sec^-1)") + geom_point(aes(color=factor(Probe))) + scale_color_discrete(name ="Probes",labels=c("Probe 1", "Probe 2", "Probe 3", "Probe 4"))
-
-    # Color plot
-    ggplot(data=meltedData, aes(x=Temp, y=R2s, group=Probe)) + ggtitle("Temperature vs R2*") + labs(x="Temperature (DegC)", y="R2* (sec^-1)") + geom_point(aes(shape=factor(Probe))) + scale_shape_discrete(name ="Probes",labels=c("Probe 1", "Probe 2", "Probe 3", "Probe 4"))
-    ggsave(sprintf("Plot-Temp-vs-R2s-%s.pdf", tempFile))
+    meltedData <- data.frame(Time=meltedImageValue$Time, Temp=meltedTemp$value, imageParam=meltedImageValue$value, Probe=meltedTemp$variable)
 
     ## Plot: Temperature
     ggplot(data=meltedData, aes(x=Time, y=Temp, group=Probe)) + ggtitle("Temperature") + labs(x="Time (s)", y="Temperature (DegC)") + geom_line() + geom_point(aes(color=factor(Probe))) + scale_color_discrete(name ="Probes",labels=c("Probe 1", "Probe 2", "Probe 3", "Probe 4"))
     ggsave(file=sprintf("Plot-Temp-%s.pdf", tempFile))
-
-    #r2smelted = melt(r2s, id.vars="Time")
-    #ggplot(data=r2smelted, aes(x=Time, y=value, group=variable)) + geom_line()
 
     meltedData <-data.frame(meltedData, Pos=0.0)
     meltedData$Pos[meltedData$Probe=="Probe1Temp"] = 1.9
@@ -134,16 +145,42 @@ analyzeImage <- function(path, sampledImageFile, tempFile, timeOffset) {
     meltedData$Pos[meltedData$Probe=="Probe4Temp"] = 45.9
 
     ggplot(data=meltedData, aes(x=Pos, y=Temp, group=Time)) + ggtitle("Position vs Temperature") + labs(x="Position (mm)", y="Temperature (DegC)") + geom_line() + geom_point()
-ggsave(file=sprintf("Plot-POS-vs-Temp-%s.pdf", tempFile))
+    ggsave(file=sprintf("Plot-POS-vs-Temp-%s.pdf", tempFile))
 
-    ggplot(data=meltedData, aes(x=Pos, y=R2s, group=Time)) + ggtitle("Position vs R2*") + labs(x="Position (mm)", y="R2* (sec^-1)") + geom_line() + geom_point()
-ggsave(file=sprintf("Plot-POS-vs-R2s-%s.pdf", tempFile))
+    ggplot(data=meltedData, aes(x=Pos, y=imageParam, group=Time))+ ggtitle(sprintf("Position vs %s", paramName)) + labs(x="Position (mm)", y=sprintf("%s (%s)", paramName, paramUnit)) + geom_line() + geom_point()
+    ggsave(file=sprintf("Plot-POS-vs-%s-%s.pdf", paramFileStr, tempFile))
     
+    ## Temperature range
+    meltedData <- meltedData[meltedData$Temp< (-5.0),]
+    #fit <- lm(meltedData$Temp ~ meltedData$imageParam)
     
+    ## Plot: Temperature vs Image Parameter
+    #ggplot(data=meltedData, aes(x=Temp, y=R2s, group=Probe)) + ggtitle("Temperature vs R2*") + labs(x="Temperature (DegC)", y="R2* (sec^-1)") + geom_point(aes(color=factor(Probe))) + scale_color_discrete(name ="Probes",labels=c("Probe 1", "Probe 2", "Probe 3", "Probe 4"))
+    p <- ggplot(data=meltedData, aes(x=Temp, y=imageParam))
+    p <- p + ggtitle(sprintf("Temperature vs %s", paramName))
+    p <- p + labs(x="Temperature (DegC)", y=sprintf("%s (%s)", paramName, paramUnit))
+    p <- p + geom_point(aes(shape=factor(Probe)))
+    p <- p + scale_shape_discrete(name ="Probes",labels=c("Probe 1", "Probe 2", "Probe 3", "Probe 4"))
+    
+    if (fitting == "linear") {
+        f1 <- y ~ x
+        p <- p + geom_smooth(method = "lm", se=FALSE, color="black", formula=f1)
+        f2 <- imageParam~Temp
+        p <- p + geom_text(x = -30, y = 450, label = lm_eqn(meltedData, f2), parse = TRUE)
+    } else if (fitting == "exp") {
+        f1 <-y ~ a* exp(b*x) + c
+        m <- nls(y ~ a* exp(b*x) + c, start=list(a=1, b=1, c=0))
+        print (m)
+        #p <- p + geom_smooth(method = "nls", formula=f1, se=FALSE, color="black", start=list(a=1))
+        #f2 <- imageParam ~ a * exp(b * Temp)
+        #p <- p + geom_text(x = -30, y = 450, label = nlm_eqn(meltedData, f2), parse = TRUE)
+    }
+    p
+    ggsave(file=sprintf("Plot-Temp-vs-%s-%s.pdf", paramFileStr, tempFile))
 }
 
 
-#Series 14 started at 11:43:28.227500 on the scanner -> 11:44:01
+#Series 14 started at 11:43:28.227500 on the scanner -> 11:44:01 on the DAQ
 #path <- "/Users/junichi/Dropbox/Experiments/UTE/Cryo-2016-02-12"
 path <- "/home/develop/Projects/Dropbox/Experiments/UTE/Cryo-2016-02-12"
 
@@ -151,7 +188,11 @@ timeOffset <- "2016-12-02 11:44:01 EST"
 tempFile <- "Temp-freeze.csv"
 #tempFile <- "Temp-thaw.csv"
 
-analyzeImage(path, "roi-r2s.csv", tempFile, timeOffset)
+# Probe 1 = ROI 1; Probe 2 = ROI 6; Probe 3 = ROI 14; Probe 4 = ROI 20
+probeROIs <- c(1, 6, 14, 20)
+
+#plotImageParameterVsTemperature(path, "roi-r2s.csv", tempFile, timeOffset, probeROIs)
+plotImageParameterVsTemperature(path, "roi-norm-intensity.csv", tempFile, timeOffset, probeROIs, paramName="Normalized Intensity", paramFileStr="NormIntensity", paramUnit="--", fitting="exp")
     
 
 
