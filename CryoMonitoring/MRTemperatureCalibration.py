@@ -19,13 +19,9 @@ import ComputeTemp
 lowerThreshold = -1000000.0
 upperThreshold =  1000000.0
 
-slicer.util.selectModule('LabelStatistics')
-
 ### Setup modules
-#slicer.util.selectModule('ComputeT2Star')
 T2StarLogic = ComputeT2Star.ComputeT2StarLogic()
 
-#slicer.util.selectModule('ComputeTemp')
 TempLogic = ComputeTemp.ComputeTempLogic()
 
 def CalcNoise(imageDir, image1Name, image2Name, ROIName):
@@ -103,25 +99,24 @@ def CalcR2Star(imageDir, firstEchoName, secondEchoName, t2StarName, r2StarName, 
         (r, firstEchoNode) = slicer.util.loadVolume(imageDir+'/'+firstEchoFile, {}, True)
         (r, secondEchoNode) = slicer.util.loadVolume(imageDir+'/'+secondEchoFile, {}, True)
 
-        t2StarVolumeNode = slicer.mrmlScene.CreateNodeByClass("vtkMRMLScalarVolumeNode")
-        slicer.mrmlScene.AddNode(t2StarVolumeNode)
-        t2StarVolumeNode.SetName(t2StarName)
-
         r2StarVolumeNode = slicer.mrmlScene.CreateNodeByClass("vtkMRMLScalarVolumeNode")
         slicer.mrmlScene.AddNode(r2StarVolumeNode)
         r2StarVolumeNode.SetName(r2StarName)
 
-        T2StarLogic.run(firstEchoNode, secondEchoNode, t2StarVolumeNode, r2StarVolumeNode, TE1, TE2, scaleFactor, upperThreshold, lowerThreshold)
+        noiseLevel = None
+        outputThreshold = [lowerThreshold, upperThreshold]
+        inputThreshold = [0.0, 0.0]
+        MinT2s = 0.00000
+
+        T2StarLogic.run(firstEchoNode, secondEchoNode, None, r2StarVolumeNode, TE1, TE2, scaleFactor, noiseLevel, outputThreshold, inputThreshold, MinT2s)
 
         ### Since PushToSlicer() called in logic.run() will delete the original node, obtain the new node and
         ### reset the selector.
         t2StarVolumeNode = slicer.util.getNode(t2StarName)
         r2StarVolumeNode = slicer.util.getNode(r2StarName)
         
-        slicer.util.saveNode(t2StarVolumeNode, imageDir+'/'+t2StarVolumeNode.GetName()+'.nrrd')
         slicer.util.saveNode(r2StarVolumeNode, imageDir+'/'+r2StarVolumeNode.GetName()+'.nrrd')
 
-        slicer.mrmlScene.RemoveNode(t2StarVolumeNode)
         slicer.mrmlScene.RemoveNode(r2StarVolumeNode)
         slicer.mrmlScene.RemoveNode(firstEchoNode)
         slicer.mrmlScene.RemoveNode(secondEchoNode)
@@ -177,7 +172,9 @@ def CalcTemp(imageDir, baselineName, referenceName, tempName, r2StarName, paramA
         slicer.mrmlScene.AddNode(tempVolumeNode)
         tempVolumeNode.SetName(tempName)
 
-        TempLogic.run(baselineR2Star, referenceR2Star, tempVolumeNode, paramA, paramB, upperThreshold, lowerThreshold)
+        outputThreshold = [lowerThreshold, upperThreshold] 
+        inputThreshold = [800, 800]
+        TempLogic.run(baselineNode, referenceNode, tempVolumeNode, paramA, paramB, outputThreshold, inputThreshold)
 
         ### Since PushToSlicer() called in logic.run() will delete the original node, obtain the new node and
         ### reset the selector.

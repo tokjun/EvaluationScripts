@@ -8,7 +8,7 @@ CryoMonitoring: Experiment Tools for CryoMonitoring Research
 
 Before use, load the script:
 
-  >>> execfile('/path/GenerateR2StarMaps.py')
+  >>> execfile('/path/MRTemperatureCalibration.py')
 
 Second echo scaling factor
 --------------------------
@@ -21,4 +21,7 @@ then, calculate the scaling factor (to calibrate the second echo to the first). 
 
   >>> CalcScalingFactorBatch('/data path/Cryo-2016-02-12/PETRA-NRRD', list[0], 'echo1-', 'echo2-', 'calib-roi-label')
 
+To generate R2* maps: 
+
+  >>> GenerateR2StarMaps('/path', list[0], scaleFactor=0.7899):
 

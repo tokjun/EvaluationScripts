@@ -151,11 +151,11 @@ plotImageParameterVsTemperature <- function(path, sampledImageFile, tempFile, ti
     ggsave(file=sprintf("Plot-POS-vs-%s-%s.pdf", paramFileStr, tempFile))
     
     ## Temperature range
-    meltedData <- meltedData[meltedData$Temp< (-5.0),]
+    #meltedData <- meltedData[meltedData$Temp< (-5.0),]
     #fit <- lm(meltedData$Temp ~ meltedData$imageParam)
     
     ## Plot: Temperature vs Image Parameter
-    #ggplot(data=meltedData, aes(x=Temp, y=R2s, group=Probe)) + ggtitle("Temperature vs R2*") + labs(x="Temperature (DegC)", y="R2* (sec^-1)") + geom_point(aes(color=factor(Probe))) + scale_color_discrete(name ="Probes",labels=c("Probe 1", "Probe 2", "Probe 3", "Probe 4"))
+    #ggplot(data=meltedData, aes(x=Temp, y=R2s, group=Probe)) + ggtitle("Temperature vs R2*") + labs(x="Temperature (DegC)", y="R2* (sec^-1)") + geom_point(aes(color=factor(Probe))) + scale_color_discrente(name ="Probes",labels=c("Probe 1", "Probe 2", "Probe 3", "Probe 4"))
     p <- ggplot(data=meltedData, aes(x=Temp, y=imageParam))
     p <- p + ggtitle(sprintf("Temperature vs %s", paramName))
     p <- p + labs(x="Temperature (DegC)", y=sprintf("%s (%s)", paramName, paramUnit))
@@ -189,10 +189,11 @@ tempFile <- "Temp-freeze.csv"
 #tempFile <- "Temp-thaw.csv"
 
 # Probe 1 = ROI 1; Probe 2 = ROI 6; Probe 3 = ROI 14; Probe 4 = ROI 20
-probeROIs <- c(1, 6, 14, 20)
+#probeROIs <- c(2, 7, 14, 20)
+probeROIs <- c(2, 7, 13, 19)
 
-#plotImageParameterVsTemperature(path, "roi-r2s.csv", tempFile, timeOffset, probeROIs)
-plotImageParameterVsTemperature(path, "roi-norm-intensity.csv", tempFile, timeOffset, probeROIs, paramName="Normalized Intensity", paramFileStr="NormIntensity", paramUnit="--", fitting="exp")
+plotImageParameterVsTemperature(path, "roi-r2s.csv", tempFile, timeOffset, probeROIs)
+#plotImageParameterVsTemperature(path, "roi-norm-intensity.csv", tempFile, timeOffset, probeROIs, paramName="Normalized Intensity", paramFileStr="NormIntensity", paramUnit="--", fitting="exp")
     
 
 
