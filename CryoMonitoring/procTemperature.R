@@ -119,8 +119,8 @@ nlm_eqn <- function(df, f) {
 lm_eqn <- function(df, f) {
     m <- lm(f, df)
     eq <- substitute(italic(y) == b %.% italic(x)+a*","~~italic(r)^2~"="~r2, 
-                     list(a = format(coef(m)[1], digits = 2), 
-                          b = format(coef(m)[2], digits = 2), 
+                     list(a = format(coef(m)[1], digits = 6), 
+                          b = format(coef(m)[2], digits = 6), 
                           r2 = format(summary(m)$r.squared, digits = 3)))
     as.character(as.expression(eq))
     
@@ -151,7 +151,7 @@ plotImageParameterVsTemperature <- function(path, sampledImageFile, tempFile, ti
     ggsave(file=sprintf("Plot-POS-vs-%s-%s.pdf", paramFileStr, tempFile))
     
     ## Temperature range
-    #meltedData <- meltedData[meltedData$Temp< (-5.0),]
+    meltedData <- meltedData[meltedData$Temp< (-5.0),]
     #fit <- lm(meltedData$Temp ~ meltedData$imageParam)
     
     ## Plot: Temperature vs Image Parameter
@@ -166,7 +166,7 @@ plotImageParameterVsTemperature <- function(path, sampledImageFile, tempFile, ti
         f1 <- y ~ x
         p <- p + geom_smooth(method = "lm", se=FALSE, color="black", formula=f1)
         f2 <- imageParam~Temp
-        p <- p + geom_text(x = -30, y = 450, label = lm_eqn(meltedData, f2), parse = TRUE)
+        p <- p + geom_text(x = -30, y = 500, label = lm_eqn(meltedData, f2), parse = TRUE)
     } else if (fitting == "exp") {
         f1 <-y ~ a* exp(b*x) + c
         m <- nls(y ~ a* exp(b*x) + c, start=list(a=1, b=1, c=0))
@@ -184,13 +184,14 @@ plotImageParameterVsTemperature <- function(path, sampledImageFile, tempFile, ti
 #path <- "/Users/junichi/Dropbox/Experiments/UTE/Cryo-2016-02-12"
 path <- "/home/develop/Projects/Dropbox/Experiments/UTE/Cryo-2016-02-12"
 
-timeOffset <- "2016-12-02 11:44:01 EST"
+#timeOffset <- "2016-12-02 11:44:01 EST"
+timeOffset <- "2016-12-02 11:42:01 EST"
 tempFile <- "Temp-freeze.csv"
 #tempFile <- "Temp-thaw.csv"
 
 # Probe 1 = ROI 1; Probe 2 = ROI 6; Probe 3 = ROI 14; Probe 4 = ROI 20
 #probeROIs <- c(2, 7, 14, 20)
-probeROIs <- c(2, 7, 13, 19)
+probeROIs <- c(2, 6, 13, 19)
 
 plotImageParameterVsTemperature(path, "roi-r2s.csv", tempFile, timeOffset, probeROIs)
 #plotImageParameterVsTemperature(path, "roi-norm-intensity.csv", tempFile, timeOffset, probeROIs, paramName="Normalized Intensity", paramFileStr="NormIntensity", paramUnit="--", fitting="exp")
