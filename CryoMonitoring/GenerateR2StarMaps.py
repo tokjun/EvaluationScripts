@@ -62,7 +62,7 @@ scaleCalibrationR2s = 129.565 ## (s^-1) based on an ex-vivo
 
 imageIndeces = [2, 5, 7, 8, 9, 10, 11, 12]
 #imageIndeces = [2,12]
-#imageIndeces = [8,9]
+#imageIndeces = [7, 8]
 
 #slicer.util.selectModule('LabelStatistics')
 
@@ -346,16 +346,7 @@ for idx in imageIndeces:
 
     TE1 = TE1Array[idx]
 
-    scaleFactor = CalcScalingFactor('baseline-petra-echo1', 'baseline-petra-echo2', 'kidney-roi-label')
-
-    if scaleFactor < 0.0:
-        scaleFactor = CalcScalingFactor('fz1-max-petra-echo1', 'fz1-max-petra-echo2', 'kidney-roi-label')
-
-    if scaleFactor < 0.0:
-        scaleFactor = CalcScalingFactor('fz2-max-petra-echo1', 'fz2-max-petra-echo2', 'kidney-roi-label')
-    
     print 'TE1 = %f' % TE1
-    print 'scaling factor = %f' % scaleFactor
 
     echo1Noise = CalcNoise('baseline-petra-echo1', 'fz1-max-petra-echo1', 'noise-roi-label')
     if echo1Noise < 0:
@@ -378,8 +369,19 @@ for idx in imageIndeces:
     #CalcR2Star(imageDir, 'fz1-max-petra-echo1-nc', 'fz1-max-petra-echo2-nc', 'fz1-max-t2s', 'fz1-max-r2s', echo1Noise, echo2Noise)
     #CalcR2Star(imageDir, 'fz2-max-petra-echo1-nc', 'fz2-max-petra-echo2-nc', 'fz2-max-t2s', 'fz2-max-r2s', echo1Noise, echo2Noise)
 
+    scaleFactor = CalcScalingFactor('baseline-petra-echo1', 'baseline-petra-echo2', 'kidney-roi-label')
+    print 'Scaling factor for baseline= %f' % scaleFactor
+    if scaleFactor < 0.0:
+        scaleFactor = CalcScalingFactor('fz1-max-petra-echo1', 'fz1-max-petra-echo2', 'kidney-roi-label')
+        print 'Using scaling factor for fz1= %f' % scaleFactor
+    if scaleFactor < 0.0:
+        scaleFactor = CalcScalingFactor('fz2-max-petra-echo1', 'fz2-max-petra-echo2', 'kidney-roi-label')
+        print 'Using scaling factor for fz2= %f' % scaleFactor
+
     CalcR2Star(imageDir, 'baseline-petra-echo1', 'baseline-petra-echo2', 'baseline-t2s', 'baseline-r2s', echo1Noise, echo2Noise)
+
     CalcR2Star(imageDir, 'fz1-max-petra-echo1', 'fz1-max-petra-echo2', 'fz1-max-t2s', 'fz1-max-r2s', echo1Noise, echo2Noise)
+
     CalcR2Star(imageDir, 'fz2-max-petra-echo1', 'fz2-max-petra-echo2', 'fz2-max-t2s', 'fz2-max-r2s', echo1Noise, echo2Noise)
     
     CalcTemp(imageDir,'baseline-r2s', 'fz1-max-r2s', 'fz1-temp')
@@ -390,8 +392,8 @@ for idx in imageIndeces:
     
     Resample(imageDir, 'fz1-temp', 'postop', 'fz1-temp-REG-postop', 'T-baseline-to-postop')
     Resample(imageDir, 'fz2-temp', 'postop', 'fz2-temp-REG-postop', 'T-baseline-to-postop')
-    Resample(imageDir, 'fz1-temp-abs', 'postop', 'fz1-temp-rel-REG-postop', 'T-fz1-max-to-postop')
-    Resample(imageDir, 'fz2-temp-abs', 'postop', 'fz2-temp-rel-REG-postop', 'T-fz2-max-to-postop')
+    Resample(imageDir, 'fz1-temp-abs', 'postop', 'fz1-temp-abs-REG-postop', 'T-fz1-max-to-postop')
+    Resample(imageDir, 'fz2-temp-abs', 'postop', 'fz2-temp-abs-REG-postop', 'T-fz2-max-to-postop')
     
     Resample(imageDir, 'fz1-max-haste', 'postop', 'fz1-max-haste-REG-postop', 'T-fz1-max-to-postop')
     Resample(imageDir, 'fz2-max-haste', 'postop', 'fz2-max-haste-REG-postop', 'T-fz2-max-to-postop')
