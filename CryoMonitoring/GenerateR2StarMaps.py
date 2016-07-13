@@ -37,6 +37,8 @@ TE1Array = {
     10: 0.00007,
     11: 0.00008,
     12: 0.00008,
+    15: 0.00007,
+    16: 0.00007,
 }
 
 
@@ -60,9 +62,8 @@ scaleFactor = 1.0  ## will be updated
 
 scaleCalibrationR2s = 129.565 ## (s^-1) based on an ex-vivo 
 
-imageIndeces = [2, 5, 7, 8, 9, 10, 11, 12]
-#imageIndeces = [2,12]
-#imageIndeces = [7, 8]
+#imageIndeces = [2, 5, 7, 8, 9, 10, 11, 12, 15, 16]
+imageIndeces = [16]
 
 #slicer.util.selectModule('LabelStatistics')
 
@@ -201,8 +202,8 @@ def CalcR2Star(imageDir, firstEchoName, secondEchoName, t2StarName, r2StarName, 
 
         ## Skip inputThreshold because, in case of Delta R2* method, scale factor is not taken into account
         ## (it will be cancelled out), and if the echo 2 is larger than echo 1, R2* can be negative. 
-        #inputThreshold = [echo1InputThreshold, echo2InputThreshold*scaleFactor]
-        inputThreshold = None
+        #inputThreshold = None
+        inputThreshold = [echo1InputThreshold, echo2InputThreshold*scaleFactor]
         T2StarLogic.run(firstEchoNode, secondEchoNode, None, r2StarVolumeNode, TE1, TE2, scaleFactor, noiseLevel, outputThreshold, inputThreshold, MinT2s)
 
         ### Since PushToSlicer() called in logic.run() will delete the original node, obtain the new node and
@@ -288,7 +289,8 @@ def CalcTemp(imageDir, baselineName, referenceName, tempName):
 
         outputThreshold = [lowerThreshold, upperThreshold] 
         #inputThreshold = [800-175, 800-175]
-        inputThreshold = None
+        inputThreshold = [0.0, 1000]
+        #inputThreshold = None
         TempLogicRel.run(baselineNode, referenceNode, tempVolumeNode, paramA, paramB, outputThreshold, inputThreshold)
 
         ### Since PushToSlicer() called in logic.run() will delete the original node, obtain the new node and
@@ -348,47 +350,58 @@ for idx in imageIndeces:
 
     print 'TE1 = %f' % TE1
 
-    echo1Noise = CalcNoise('baseline-petra-echo1', 'fz1-max-petra-echo1', 'noise-roi-label')
+    echo1Noise = CalcNoise('baseline-petra-echo1', 'fz1-max-petra-echo1', 'kidney-roi-label')
     if echo1Noise < 0:
-        echo1Noise = CalcNoise('baseline-petra-echo1', 'fz2-max-petra-echo1', 'noise-roi-label')
+        echo1Noise = CalcNoise('baseline-petra-echo1', 'fz2-max-petra-echo1', 'kidney-roi-label')
 
-    echo2Noise = CalcNoise('baseline-petra-echo2', 'fz1-max-petra-echo2', 'noise-roi-label')
+    echo2Noise = CalcNoise('baseline-petra-echo2', 'fz1-max-petra-echo2', 'kidney-roi-label')
     if echo2Noise < 0:
-        echo2Noise = CalcNoise('baseline-petra-echo2', 'fz2-max-petra-echo2', 'noise-roi-label')
+        echo2Noise = CalcNoise('baseline-petra-echo2', 'fz2-max-petra-echo2', 'kidney-roi-label')
 
-    print "Echo 1 Noise: %d" % echo1Noise
-    print "Echo 2 Noise: %d" % echo2Noise
-    #CorrectNoise('baseline-petra-echo1', 'baseline-petra-echo1-nc', echo1Noise)
-    #CorrectNoise('baseline-petra-echo2', 'baseline-petra-echo2-nc', echo2Noise)
-    #CorrectNoise('fz1-max-petra-echo1', 'fz1-max-petra-echo1-nc', echo1Noise)
-    #CorrectNoise('fz1-max-petra-echo2', 'fz1-max-petra-echo2-nc', echo2Noise)
-    #CorrectNoise('fz2-max-petra-echo1', 'fz2-max-petra-echo1-nc', echo1Noise)
-    #CorrectNoise('fz2-max-petra-echo2', 'fz2-max-petra-echo2-nc', echo2Noise)
+    print 'Echo 1 noise: %f' % echo1Noise
+    print 'Echo 2 noise: %f' % echo2Noise
 
-    #CalcR2Star(imageDir, 'baseline-petra-echo1-nc', 'baseline-petra-echo2-nc', 'baseline-t2s', 'baseline-r2s', echo1Noise, echo2Noise)
-    #CalcR2Star(imageDir, 'fz1-max-petra-echo1-nc', 'fz1-max-petra-echo2-nc', 'fz1-max-t2s', 'fz1-max-r2s', echo1Noise, echo2Noise)
-    #CalcR2Star(imageDir, 'fz2-max-petra-echo1-nc', 'fz2-max-petra-echo2-nc', 'fz2-max-t2s', 'fz2-max-r2s', echo1Noise, echo2Noise)
+    CorrectNoise('baseline-petra-echo1', 'baseline-petra-echo1-nc', echo1Noise)
+    CorrectNoise('baseline-petra-echo2', 'baseline-petra-echo2-nc', echo2Noise)
+    CorrectNoise('fz1-max-petra-echo1', 'fz1-max-petra-echo1-nc', echo1Noise)
+    CorrectNoise('fz1-max-petra-echo2', 'fz1-max-petra-echo2-nc', echo2Noise)
+    CorrectNoise('fz2-max-petra-echo1', 'fz2-max-petra-echo1-nc', echo1Noise)
+    CorrectNoise('fz2-max-petra-echo2', 'fz2-max-petra-echo2-nc', echo2Noise)
 
-    scaleFactor = CalcScalingFactor('baseline-petra-echo1', 'baseline-petra-echo2', 'kidney-roi-label')
+    # Recaulcate scaling factor for absolute temperature methods
+    scaleFactor = CalcScalingFactor('baseline-petra-echo1-nc', 'baseline-petra-echo2-nc', 'kidney-roi-label')
     print 'Scaling factor for baseline= %f' % scaleFactor
     if scaleFactor < 0.0:
-        scaleFactor = CalcScalingFactor('fz1-max-petra-echo1', 'fz1-max-petra-echo2', 'kidney-roi-label')
+        scaleFactor = CalcScalingFactor('fz1-max-petra-echo1-nc', 'fz1-max-petra-echo2-nc', 'kidney-roi-label')
         print 'Using scaling factor for fz1= %f' % scaleFactor
     if scaleFactor < 0.0:
-        scaleFactor = CalcScalingFactor('fz2-max-petra-echo1', 'fz2-max-petra-echo2', 'kidney-roi-label')
+        scaleFactor = CalcScalingFactor('fz2-max-petra-echo1-nc', 'fz2-max-petra-echo2-nc', 'kidney-roi-label')
         print 'Using scaling factor for fz2= %f' % scaleFactor
-
-    CalcR2Star(imageDir, 'baseline-petra-echo1', 'baseline-petra-echo2', 'baseline-t2s', 'baseline-r2s', echo1Noise, echo2Noise)
-
-    CalcR2Star(imageDir, 'fz1-max-petra-echo1', 'fz1-max-petra-echo2', 'fz1-max-t2s', 'fz1-max-r2s', echo1Noise, echo2Noise)
-
-    CalcR2Star(imageDir, 'fz2-max-petra-echo1', 'fz2-max-petra-echo2', 'fz2-max-t2s', 'fz2-max-r2s', echo1Noise, echo2Noise)
     
+    CalcR2Star(imageDir, 'baseline-petra-echo1-nc', 'baseline-petra-echo2-nc', 'baseline-t2s', 'baseline-r2s', echo1Noise, echo2Noise)
+    CalcR2Star(imageDir, 'fz1-max-petra-echo1-nc', 'fz1-max-petra-echo2-nc', 'fz1-max-t2s', 'fz1-max-r2s',     echo1Noise, echo2Noise)
+    CalcR2Star(imageDir, 'fz2-max-petra-echo1-nc', 'fz2-max-petra-echo2-nc', 'fz2-max-t2s', 'fz2-max-r2s',     echo1Noise, echo2Noise)
+
+    #CalcR2Star(imageDir, 'baseline-petra-echo1', 'baseline-petra-echo2', 'baseline-t2s', 'baseline-r2s', echo1Noise, echo2Noise)
+    #CalcR2Star(imageDir, 'fz1-max-petra-echo1', 'fz1-max-petra-echo2', 'fz1-max-t2s', 'fz1-max-r2s', echo1Noise, echo2Noise)
+    #CalcR2Star(imageDir, 'fz2-max-petra-echo1', 'fz2-max-petra-echo2', 'fz2-max-t2s', 'fz2-max-r2s', echo1Noise, echo2Noise)
+
+    #scaleFactor = CalcScalingFactor('baseline-petra-echo1', 'baseline-petra-echo2', 'kidney-roi-label')
+    #print 'Scaling factor for baseline= %f' % scaleFactor
+    #if scaleFactor < 0.0:
+    #    scaleFactor = CalcScalingFactor('fz1-max-petra-echo1', 'fz1-max-petra-echo2', 'kidney-roi-label')
+    #    print 'Using scaling factor for fz1= %f' % scaleFactor
+    #if scaleFactor < 0.0:
+    #    scaleFactor = CalcScalingFactor('fz2-max-petra-echo1', 'fz2-max-petra-echo2', 'kidney-roi-label')
+    #    print 'Using scaling factor for fz2= %f' % scaleFactor
+
     CalcTemp(imageDir,'baseline-r2s', 'fz1-max-r2s', 'fz1-temp')
     CalcTemp(imageDir,'baseline-r2s', 'fz2-max-r2s', 'fz2-temp')
 
-    CalcTempAbs(imageDir,'fz1-max-petra-echo1', 'fz1-max-petra-echo2', 'fz1-temp-abs', echo1Noise, echo2Noise)
-    CalcTempAbs(imageDir,'fz2-max-petra-echo1', 'fz2-max-petra-echo2', 'fz2-temp-abs', echo1Noise, echo2Noise)
+    #CalcTempAbs(imageDir,'fz1-max-petra-echo1', 'fz1-max-petra-echo2', 'fz1-temp-abs', echo1Noise, echo2Noise)
+    #CalcTempAbs(imageDir,'fz2-max-petra-echo1', 'fz2-max-petra-echo2', 'fz2-temp-abs', echo1Noise, echo2Noise)
+    CalcTempAbs(imageDir,'fz1-max-petra-echo1-nc', 'fz1-max-petra-echo2', 'fz1-temp-abs', echo1Noise, echo2Noise)
+    CalcTempAbs(imageDir,'fz2-max-petra-echo1-nc', 'fz2-max-petra-echo2', 'fz2-temp-abs', echo1Noise, echo2Noise)
     
     Resample(imageDir, 'fz1-temp', 'postop', 'fz1-temp-REG-postop', 'T-baseline-to-postop')
     Resample(imageDir, 'fz2-temp', 'postop', 'fz2-temp-REG-postop', 'T-baseline-to-postop')
