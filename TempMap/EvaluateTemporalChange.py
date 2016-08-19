@@ -38,7 +38,8 @@ if os.path.isfile(baselinePath):
 
 logic = PRFThermometry.PRFThermometryLogic()
 
-for index in range(394,590):
+for index in range(394,591):
+#for index in range(394,430):
 
     if index % 2 == 1: # Odd index is for magnitude image -- skip
         continue
@@ -58,7 +59,7 @@ for index in range(394,590):
     gamma = 42.576
     B0 = 3.0
     TE = 0.01
-    BT = 37.0
+    BT = 0.0
     upperThreshold = 1000.0
     lowerThreshold = -1000.0
     logic.run(True, baselineNode, referenceNode, labelNode, tempmapNode,

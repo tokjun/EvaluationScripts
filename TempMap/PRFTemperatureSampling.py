@@ -121,8 +121,9 @@ def GenerateTempImages(imageDir, imageIndices, baselineIndex, prefix='T-MAP-'):
 
 def SampleTempPerROI(imageDir, imageList, outputFile, ROIName='roi-label', prefixTemp='Temp-'):
 
-    imageIndices = imageList[0]
-    imageTime = imageList[1]
+    #imageIndices = imageList[0]
+    imageIndices = imageList
+    #imageTime = imageList[1]
     result = []
     i = 0
     
@@ -132,7 +133,8 @@ def SampleTempPerROI(imageDir, imageList, outputFile, ROIName='roi-label', prefi
         fileTemp = '%s%03d' % (prefixTemp, idx)
         stat = SampleIntensities(imageDir, fileTemp, ROIName)
         row = stat[0]
-        row[0] = imageTime[i]     # Replace intensity for index 0 with because it will not be used.
+        #row[0] = imageTime[i]     # Replace intensity for index 0 with because it will not be used.
+        row[0] = 0.0
         result.append(stat[0])  # Record only mean
         i = i + 1
     
