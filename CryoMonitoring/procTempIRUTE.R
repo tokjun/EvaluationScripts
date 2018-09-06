@@ -135,17 +135,17 @@ test20180830 <- function() {
     fTempData <- fTempData[fTempData$Time > 100 & fTempData$Time<10000,]
     plotTempDataFiltered(fTempData)
 
-    imageData <- loadImageList('/Users/junichi/Projects/UTE/UTE-Phantom/IRUTE-Test-2018-08-24/image_timestamp.csv', 1, 13)
-
-    imageDataT1    <- imageData[substring(imageData$Description, 0, 10) == "SAG 3D VIB",]
-    imageDataT2    <- imageData[substring(imageData$Description, 0, 10) == "SAG TSE T2",]
-    imageDataUTE   <- imageData[substring(imageData$Description, 0, 10) == "UTE 2-echo",]
-    imageDataIRUTE <- imageData[substring(imageData$Description, 0, 10) == "IR-UTE 1NE",]
-    
-    imageDataT1 <- calcRefTempPerImage(imageDataT1, fTempData, 30)
-    imageDataT2 <- calcRefTempPerImage(imageDataT2, fTempData, 30)
-    imageDataUTE <- calcRefTempPerImage(imageDataUTE, fTempData, 30)
-    imageDataIRUTE <- calcRefTempPerImage(imageDataIRUTE, fTempData, 30)
+    #imageData <- loadImageList('/Users/junichi/Projects/UTE/UTE-Phantom/IRUTE-Test-2018-08-24/image_timestamp.csv', 1, 13)
+    #
+    #imageDataT1    <- imageData[substring(imageData$Description, 0, 10) == "SAG 3D VIB",]
+    #imageDataT2    <- imageData[substring(imageData$Description, 0, 10) == "SAG TSE T2",]
+    #imageDataUTE   <- imageData[substring(imageData$Description, 0, 10) == "UTE 2-echo",]
+    #imageDataIRUTE <- imageData[substring(imageData$Description, 0, 10) == "IR-UTE 1NE",]
+    #
+    #imageDataT1 <- calcRefTempPerImage(imageDataT1, fTempData, 30)
+    #imageDataT2 <- calcRefTempPerImage(imageDataT2, fTempData, 30)
+    #imageDataUTE <- calcRefTempPerImage(imageDataUTE, fTempData, 30)
+    #imageDataIRUTE <- calcRefTempPerImage(imageDataIRUTE, fTempData, 30)
     
 }
     
