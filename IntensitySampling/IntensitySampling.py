@@ -28,6 +28,7 @@ import math
 import tempfile
 import time
 import numpy
+import re
 from __main__ import vtk, qt, ctk, slicer
 from slicer.ScriptedLoadableModule import *
 
@@ -38,7 +39,7 @@ def IntensitySampling(imageListFile, sourceDir, outputFile):
     
     ### Open output file
     outputFile = open(outputFile, 'w')
-    outputFile.write("Image,Index,Count,Min,Max,Mean,StdDev\n")
+    outputFile.write("Image,Series,Index,Count,Min,Max,Mean,StdDev\n")
 
     ### Load the image file list
     try :
@@ -73,8 +74,18 @@ def IntensitySampling(imageListFile, sourceDir, outputFile):
         labelStatistics.Execute(image, roiImage)
             
         n = labelStatistics.GetNumberOfLabels()
+        
+        # Detect series number (assuming that the series number comes at the begining of NRRD file name
+        imagename = imageFile.rstrip()
+        res = re.split(' ', imagename)
+        if res[0].isdigit():
+            series = res[0]
+        else:
+            series = -1
+            
         for i in range(1,n):
-            outputFile.write("%s," % imageFile.rstrip())  #imageFile
+            outputFile.write("%s," % imagename)  #imageFile
+            outputFile.write("%s," % series)  #imageFile
             outputFile.write("%d," % i)                           #Index
             outputFile.write("%f," % labelStatistics.GetCount(i))  #Count
             outputFile.write("%f," % labelStatistics.GetMinimum(i))    #Min

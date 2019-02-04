@@ -13,10 +13,12 @@ loadTempData <- function(path, startTimeStr) {
 #
 #  Ex)
 #    tempData <- loadTempData('/Users/junichi/Projects/UTE/UTE-Phantom/IRUTE-Test-2018-08-24/temp-2018-08-24.csv', "8/24/2018  11:38:29 AM")
-    tempData <- read.csv(path)
+
+    tempData <- read.csv(path, sep=",")
     
     startTime <- strptime(startTimeStr, "%m/%d/%Y %I:%M:%OS %p")
-    tempData$Time <- as.numeric(strptime(tempData$Date.Time, "%m/%d/%Y %I:%M:%OS %p") - startTime)
+    tempData$Time <- as.numeric(strptime(tempData$Date.Time, "%m/%d/%Y %I:%M:%OS %p") - startTime, units="secs")
+
     columns <- c("Time", "CHANNEL0", "CHANNEL1", "CHANNEL2", "CHANNEL3", "CHANNEL4")
     tempData <- tempData[,columns]
     tempData <- tempData[!is.na(tempData$Time),]
@@ -67,7 +69,7 @@ filterTempData <- function(tempData) {
 }
 
 
-loadImageList <- function(path, firstStudy, firstSeries) {
+loadImageList <- function(path) {
 #    
 #  Load timestamp extracted from the DICOM headers.
 #  The script aggregate the data by series and take the earliest timestamp (= time to start acquisition of the series)
@@ -85,11 +87,28 @@ loadImageList <- function(path, firstStudy, firstSeries) {
     imageData <- aggregate(imageData[, c("Timestamp")], imageData[,c("Study", "Series","Description")], min)
     names(imageData) <- c("Study", "Series", "Description", "Timestamp")
 
+    return(imageData)
+}
+
+adjustImageListTimestampBySeries <- function(imageData, firstStudy, firstSeries) {
+    
     # Look up the time stamp for the first image
     firstImage <- imageData[imageData$Study==firstStudy & imageData$Series==firstSeries,]
-    imageData$Timestamp <- strptime(imageData$Timestamp, "%H%M%OS") - strptime(firstImage$Timestamp, "%H%M%OS")
+    baseTimestamp <- firstImage$Timestamp
+    imageData$Timestamp <- strptime(imageData$Timestamp, "%H%M%OS") - strptime(baseTimestamp, "%H%M%OS")
     imageData <- imageData[!is.na(imageData$Timestamp),]
-    imageData$Timestamp <- as.numeric(imageData$Timestamp)
+    imageData$Timestamp <- as.numeric(imageData$Timestamp, units="secs")
+
+    r <- list("imageData"=imageData, "baseTimestamp"=baseTimestamp)
+    return(r)
+}
+
+adjustImageListTimestampByTimestamp <- function(imageData, baseTimestamp) {
+    
+    # Look up the time stamp for the first image
+    imageData$Timestamp <- strptime(imageData$Timestamp, "%H%M%OS") - strptime(baseTimestamp, "%H%M%OS")
+    imageData <- imageData[!is.na(imageData$Timestamp),]
+    imageData$Timestamp <- as.numeric(imageData$Timestamp, units="secs")
     
     return(imageData)
 }
@@ -128,24 +147,97 @@ calcRefTempPerImage <- function(imageData, tempData, duration) {
 }
 
 
+reformatImageTempData <- function(data) {
+
+    # Reformat image-temperature table.
+    # In the reformatted table, each line show one temperature from a probe
+    # Channel of the probe is 1-5 instead of 0-4. This corresponds to the indecies
+    # in the label map
+
+    data <- melt(data=data, id.vars=c("Study", "Series", "Description", "Timestamp"), measure.vars=c("Temp0", "Temp1", "Temp2", "Temp3", "Temp4"), value.name="Temperature", variable.name="Channel")
+    levels(data$Channel) <- 1:5
+
+    data <- data[order(data$Timestamp),]
+}
+    
+
+mergeTempIntensity <- function(imageTempData, intensityData) {
+
+    # Use the same column names as imageTempData
+    colnames(intensityData) <- c("Image",  "Series", "Channel",  "Count",  "Min",    "Max",    "Mean",   "StdDev")
+    result <- merge(intensityData, imageTempData)
+    result <- result[,c("Study", "Series", "Timestamp", "Channel", "Image", "Min", "Max", "Mean", "StdDev", "Temperature")]
+    return (result)
+}
+    
+
+
 test20180830 <- function() {
 
-    tempData <- loadTempData('/Users/junichi/Projects/UTE/UTE-Phantom/IRUTE-Test-2018-08-24/temp-2018-08-24.csv', "8/24/2018  11:38:29 AM")
+    tempData <- loadTempData('/Users/junichi/Projects/UTE/UTE-Phantom/IRUTE-Test-2018-08-24/temp-2018-08-24-2.csv', "8/24/2018  11:38:29 AM")
     fTempData <- filterTempData(tempData)
     fTempData <- fTempData[fTempData$Time > 100 & fTempData$Time<10000,]
     plotTempDataFiltered(fTempData)
 
-    #imageData <- loadImageList('/Users/junichi/Projects/UTE/UTE-Phantom/IRUTE-Test-2018-08-24/image_timestamp.csv', 1, 13)
-    #
-    #imageDataT1    <- imageData[substring(imageData$Description, 0, 10) == "SAG 3D VIB",]
-    #imageDataT2    <- imageData[substring(imageData$Description, 0, 10) == "SAG TSE T2",]
-    #imageDataUTE   <- imageData[substring(imageData$Description, 0, 10) == "UTE 2-echo",]
-    #imageDataIRUTE <- imageData[substring(imageData$Description, 0, 10) == "IR-UTE 1NE",]
-    #
-    #imageDataT1 <- calcRefTempPerImage(imageDataT1, fTempData, 30)
-    #imageDataT2 <- calcRefTempPerImage(imageDataT2, fTempData, 30)
-    #imageDataUTE <- calcRefTempPerImage(imageDataUTE, fTempData, 30)
-    #imageDataIRUTE <- calcRefTempPerImage(imageDataIRUTE, fTempData, 30)
+    imageData <- loadImageList('/Users/junichi/Projects/UTE/UTE-Phantom/IRUTE-Test-2018-08-24/image_timestamp.csv')
+    # Adjust the timestamp (offset from the first image) and get the timestamp for the first image
+    r <- adjustImageListTimestampBySeries(imageData, 1, 13)
     
+    imageDataT1    <- r$imageData[substring(r$imageData$Description, 0, 10) == "SAG 3D VIB",]
+    imageDataT2    <- r$imageData[substring(r$imageData$Description, 0, 10) == "SAG TSE T2",]
+    imageDataUTE   <- r$imageData[substring(r$imageData$Description, 0, 10) == "UTE 2-echo",]
+    imageDataIRUTE <- r$imageData[substring(r$imageData$Description, 0, 10) == "IR-UTE 1NE",]
+
+    imageDataIRUTEPhase <- loadImageList('/Users/junichi/Projects/UTE/UTE-Phantom/IRUTE-Test-2018-08-24/image_timestamp_phase.csv')
+    imageDataIRUTEPhase <- adjustImageListTimestampByTimestamp(imageDataIRUTEPhase, r$baseTimestamp)
+    imageDataIRUTEReal  <- loadImageList('/Users/junichi/Projects/UTE/UTE-Phantom/IRUTE-Test-2018-08-24/image_timestamp_real.csv')
+    imageDataIRUTEReal  <- adjustImageListTimestampByTimestamp(imageDataIRUTEReal, r$baseTimestamp)
+    
+    imageTempDataT1         <- calcRefTempPerImage(imageDataT1, fTempData, 30)
+    imageTempDataT2         <- calcRefTempPerImage(imageDataT2, fTempData, 30)
+    imageTempDataUTE        <- calcRefTempPerImage(imageDataUTE, fTempData, 30)
+    imageTempDataIRUTE      <- calcRefTempPerImage(imageDataIRUTE, fTempData, 30)
+    imageTempDataIRUTEPhase <- calcRefTempPerImage(imageDataIRUTEPhase, fTempData, 30)
+    imageTempDataIRUTEReal  <- calcRefTempPerImage(imageDataIRUTEReal, fTempData, 30)
+
+    # Output the reference temperature data
+    imageTempDataT1 <- reformatImageTempData(imageTempDataT1)
+    imageTempDataT2 <- reformatImageTempData(imageTempDataT2)
+    imageTempDataUTE <- reformatImageTempData(imageTempDataUTE)
+    imageTempDataIRUTE <- reformatImageTempData(imageTempDataIRUTE)
+    imageTempDataIRUTEPhase <- reformatImageTempData(imageTempDataIRUTEPhase)
+    imageTempDataIRUTEReal <- reformatImageTempData(imageTempDataIRUTEReal)
+
+    write.csv(imageTempDataT1, file = "imageTemp-T1.csv")
+    write.csv(imageTempDataT2, file = "imageTemp-T2.csv")
+    write.csv(imageTempDataUTE,file = "imageTemp-UTE.csv")
+    write.csv(imageTempDataIRUTE,file = "imageTemp-IRUTE.csv")
+    write.csv(imageTempDataIRUTEPhase,file = "imageTemp-IRUTEPhase.csv")
+    write.csv(imageTempDataIRUTEReal,file = "imageTemp-IRUTEReal.csv")
+    
+#    print(imageTempDataT1)
+
+    # Read the image intensity data
+    IntensityDataT1         <- read.csv("intensity-T1.csv")
+    IntensityDataT2         <- read.csv("intensity-T2.csv")
+    IntensityDataUTE        <- read.csv("intensity-UTE.csv")
+    IntensityDataIRUTE      <- read.csv("intensity-IRUTE.csv")
+    IntensityDataIRUTEPhase <- read.csv("intensity-IRUTEPhase.csv")
+    IntensityDataIRUTEReal  <- read.csv("intensity-IRUTEReal.csv")
+
+    ResultT1         <- mergeTempIntensity(imageTempDataT1, IntensityDataT1)
+    ResultT2         <- mergeTempIntensity(imageTempDataT2, IntensityDataT2)
+    ResultUTE        <- mergeTempIntensity(imageTempDataUTE, IntensityDataUTE)
+    ResultIRUTE      <- mergeTempIntensity(imageTempDataIRUTE, IntensityDataIRUTE)
+    ResultIRUTEPhase <- mergeTempIntensity(imageTempDataIRUTEPhase, IntensityDataIRUTEPhase)
+    ResultIRUTEReal  <- mergeTempIntensity(imageTempDataIRUTEReal , IntensityDataIRUTEReal)
+    
+    write.csv(ResultT1, file = "result-T1.csv")
+    write.csv(ResultT2, file = "result-T2.csv")
+    write.csv(ResultUTE,file = "result-UTE.csv")
+    write.csv(ResultIRUTE,file = "result-IRUTE.csv")
+    write.csv(ResultIRUTEPhase,file = "result-IRUTEPhase.csv")
+    write.csv(ResultIRUTEReal,file = "result-IRUTEReal.csv")
+
 }
     
