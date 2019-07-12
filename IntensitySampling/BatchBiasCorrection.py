@@ -35,6 +35,53 @@ from slicer.ScriptedLoadableModule import *
 import SimpleITK as sitk
 import sitkUtils
 
+def BatchBiasCorrectionPerImage(imageListFile, srcDir, destDir):
+    
+    ### Load the image file list
+    try :
+        inputFile = open(imageListFile, 'r')
+    except IOError:
+        print "Could not load the image list file.\n"
+        return
+
+    ### Load the bias field map
+    (r, bfNode) = slicer.util.loadVolume(biasFieldImageFile, {'singleFile' : True}, True)
+    
+    if r == False:
+        print "Could not load the bias field image.\n"
+        return
+
+    bfImage = sitk.Cast(sitkUtils.PullFromSlicer(bfNode.GetID()), sitk.sitkFloat32)
+
+    for imageFile in inputFile:
+        
+        ### Load image data
+        print "Processing "+srcDir+'/'+imageFile.rstrip()+"..."
+        (r, imageNode) = slicer.util.loadVolume(srcDir+'/'+imageFile.rstrip(), {'singleFile' : True}, True)
+            
+        if r == False:
+            print "Could not load the image.\n"
+            continue
+
+        outputName = imageFile.rstrip()
+            
+        image    = sitk.Cast(sitkUtils.PullFromSlicer(imageNode.GetID()), sitk.sitkFloat32)
+        divideFilter = sitk.DivideRealImageFilter()
+        correctedImage = divideFilter.Execute(image, bfImage)
+
+        correctedImageNode = slicer.mrmlScene.CreateNodeByClass("vtkMRMLScalarVolumeNode")
+        slicer.mrmlScene.AddNode(correctedImageNode)
+        correctedImageNode.SetName(outputName)
+        sitkUtils.PushToSlicer(correctedImage, correctedImageNode.GetName(), 0, True)
+        correctedImageNode = slicer.util.getNode(outputName)
+        slicer.util.saveNode(correctedImageNode, destDir+'/'+correctedImageNode.GetName()+'.nrrd')
+
+        slicer.mrmlScene.RemoveNode(imageNode)
+        slicer.mrmlScene.RemoveNode(correctedImageNode)
+        
+    slicer.mrmlScene.RemoveNode(bfNode)
+    
+
 def BatchBiasCorrection(imageListFile, biasFieldImageFile, srcDir, destDir):
     
     ### Load the image file list
@@ -63,7 +110,7 @@ def BatchBiasCorrection(imageListFile, biasFieldImageFile, srcDir, destDir):
             print "Could not load the image.\n"
             continue
 
-        outputName = "Corrected-"+imageFile.rstrip()
+        outputName = imageFile.rstrip()
             
         image    = sitk.Cast(sitkUtils.PullFromSlicer(imageNode.GetID()), sitk.sitkFloat32)
         divideFilter = sitk.DivideRealImageFilter()
