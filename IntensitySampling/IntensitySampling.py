@@ -45,16 +45,16 @@ def IntensitySampling(imageListFile, sourceDir, outputFile):
     try :
         inputFile = open(imageListFile, 'r')
     except IOError:
-        print "Could not load the image list file.\n"
+        print("Could not load the image list file.\n")
         return
 
     ### Load the label map
     lmap = inputFile.readline().rstrip()
-    print lmap
+    print(lmap)
     (r, labelNode) = slicer.util.loadVolume(sourceDir+'/'+lmap, {'singleFile' : True}, True)
     
     if r == False:
-        print "Could not load the label map.\n"
+        print("Could not load the label map.\n")
         return
 
     roiImage = sitk.Cast(sitkUtils.PullFromSlicer(labelNode.GetID()), sitk.sitkInt8)
@@ -62,11 +62,11 @@ def IntensitySampling(imageListFile, sourceDir, outputFile):
     for imageFile in inputFile:
         
         ### Load image data
-        print "Processing "+sourceDir+'/'+imageFile.rstrip()+"..."
+        print("Processing "+sourceDir+'/'+imageFile.rstrip()+"...")
         (r, imageNode) = slicer.util.loadVolume(sourceDir+'/'+imageFile.rstrip(), {'singleFile' : True}, True)
             
         if r == False:
-            print "Could not load the image.\n"
+            print("Could not load the image.\n")
             continue
             
         image    = sitk.Cast(sitkUtils.PullFromSlicer(imageNode.GetID()), sitk.sitkFloat32)
