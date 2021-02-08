@@ -151,11 +151,19 @@ reformatImageTempData <- function(data) {
 
     # Reformat image-temperature table.
     # In the reformatted table, each line show one temperature from a probe
-    # Channel of the probe is 1-5 instead of 0-4. This corresponds to the indecies
+    # Channel of the probe is 1-N instead of 0-(N-1). This corresponds to the indecies
     # in the label map
 
-    data <- melt(data=data, id.vars=c("Study", "Series", "Description", "Timestamp"), measure.vars=c("Temp0", "Temp1", "Temp2", "Temp3", "Temp4"), value.name="Temperature", variable.name="Channel")
-    levels(data$Channel) <- 1:5
+    nChannel <- ncol(data)-4
+
+    cnames <- c()
+    for (col in 1:nChannel) {
+        name <- sprintf("Temp%d", col-1)
+        cnames <- c(cnames, name)
+    }
+    
+    data <- melt(data=data, id.vars=c("Study", "Series", "Description", "Timestamp"), measure.vars=cnames, value.name="Temperature", variable.name="Channel")
+    levels(data$Channel) <- 1:nChannel
 
     data <- data[order(data$Timestamp),]
 }
@@ -172,3 +180,21 @@ mergeTempIntensity <- function(imageTempData, intensityData) {
     
 
     
+interpTempForLabel <- function(imageTempData, probePosition) {
+
+    for (row in 1:nrow(imageTempData)) {
+        temperature <- imageTempData[row, 5:9]
+        probeTemp <- data.frame("temperature"=t(temperature)[,], "position"=(-probePosition$position))
+        if (! any(is.nan(probeTemp$temperature))) {
+            fit <- nls(temperature ~ SSasymp(position, yf, y0, log_alpha), data = probeTemp)    
+            newData <- data.frame("position" = labelPositionT1$position)
+            newData$temperature <- predict(fit, newData)
+            for (col in 1:length(newData$temperature)) {
+                colname <- sprintf("Temp%d", col)
+                imageTempData[row, colname] <- newData$temperature[col]
+            }
+        }
+    }
+    imageTempDataNew <- imageTempData[!is.nan(imageTempData$Temp0), ]
+    return(imageTempDataNew)
+}
