@@ -180,17 +180,17 @@ mergeTempIntensity <- function(imageTempData, intensityData) {
     
 
     
-interpTempForLabel <- function(imageTempData, probePosition) {
+interpTempForLabel <- function(imageTempData, probePosition, labelPosition) {
 
     for (row in 1:nrow(imageTempData)) {
         temperature <- imageTempData[row, 5:9]
         probeTemp <- data.frame("temperature"=t(temperature)[,], "position"=(-probePosition$position))
         if (! any(is.nan(probeTemp$temperature))) {
             fit <- nls(temperature ~ SSasymp(position, yf, y0, log_alpha), data = probeTemp)    
-            newData <- data.frame("position" = labelPositionT1$position)
+            newData <- data.frame("position" = labelPosition$position)
             newData$temperature <- predict(fit, newData)
             for (col in 1:length(newData$temperature)) {
-                colname <- sprintf("Temp%d", col)
+                colname <- sprintf("Temp%d", col-1)
                 imageTempData[row, colname] <- newData$temperature[col]
             }
         }
