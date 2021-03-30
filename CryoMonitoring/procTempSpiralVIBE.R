@@ -147,14 +147,16 @@ calcRefTempPerImage <- function(imageData, tempData, duration) {
 }
 
 
-reformatImageTempData <- function(data) {
+reformatImageTempData <- function(data, nChannel=0) {
 
     # Reformat image-temperature table.
     # In the reformatted table, each line show one temperature from a probe
     # Channel of the probe is 1-N instead of 0-(N-1). This corresponds to the indecies
     # in the label map
 
-    nChannel <- ncol(data)-4
+    if (nChannel == 0) {
+        nChannel <- ncol(data)-4
+    }
 
     cnames <- c()
     for (col in 1:nChannel) {
@@ -180,13 +182,34 @@ mergeTempIntensity <- function(imageTempData, intensityData) {
     
 
     
-interpTempForLabel <- function(imageTempData, probePosition, labelPosition) {
+interpTempForLabel <- function(imageTempData, probePosition, labelPosition, posSign=-1.0) {
 
     for (row in 1:nrow(imageTempData)) {
         temperature <- imageTempData[row, 5:9]
-        probeTemp <- data.frame("temperature"=t(temperature)[,], "position"=(-probePosition$position))
+        probeTemp <- data.frame("temperature"=t(temperature)[,], "position"=(posSign * probePosition$position))
         if (! any(is.nan(probeTemp$temperature))) {
             fit <- nls(temperature ~ SSasymp(position, yf, y0, log_alpha), data = probeTemp)    
+            newData <- data.frame("position" = labelPosition$position)
+            newData$temperature <- predict(fit, newData)
+            for (col in 1:length(newData$temperature)) {
+                colname <- sprintf("Temp%d", col-1)
+                imageTempData[row, colname] <- newData$temperature[col]
+            }
+        }
+    }
+    imageTempDataNew <- imageTempData[!is.nan(imageTempData$Temp0), ]
+    return(imageTempDataNew)
+}
+
+
+interpTempForLabelLM <- function(imageTempData, probePosition, labelPosition, tempIndex=5:9, posSign=-1.0) {
+
+    for (row in 1:nrow(imageTempData)) {
+        temperature <- imageTempData[row, tempIndex]
+        probeTemp <- data.frame("temperature"=t(temperature)[,], "position"=(posSign * probePosition$position))
+        if (! any(is.nan(probeTemp$temperature))) {
+            fit <- lm(temperature ~ position, data = probeTemp)
+            #fit <- nls(temperature ~ SSasymp(position, yf, y0, log_alpha), data = probeTemp)    
             newData <- data.frame("position" = labelPosition$position)
             newData$temperature <- predict(fit, newData)
             for (col in 1:length(newData$temperature)) {
