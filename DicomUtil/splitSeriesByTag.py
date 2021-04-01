@@ -1,9 +1,9 @@
 import argparse, sys, shutil, os, logging
-#import qt, ctk, slicer
-import tempfile
+import qt, ctk, slicer
+#import tempfile
 import sqlite3
 import pydicom
-#import DICOMLib
+import DICOMLib
 #from DICOMLib.DICOMUtils import TemporaryDICOMDatabase
 #from slicer.ScriptedLoadableModule import *
 
@@ -32,6 +32,7 @@ import pydicom
 #
 # Match DICOM attriburtes
 #
+
 def getDICOMAttribute(con, path, tags):
 
     dataset = None
@@ -64,7 +65,6 @@ def removeSpecialCharacter(v):
 
     return removed
 
-
 def concatColNames(tags):
 
     r = ''
@@ -80,7 +80,6 @@ def concatColNames(tags):
 def buildFilePathDBByTags(con, srcDir, tags, fRecursive=True):
 
     # Create a table
-    print('CREATE TABLE dicom (' + concatColNames(tags) + 'path text)')    
     con.execute('CREATE TABLE dicom (' + concatColNames(tags) + ',path text)')
 
     filePathList = []
@@ -108,16 +107,38 @@ def buildFilePathDBByTags(con, srcDir, tags, fRecursive=True):
     con.commit()
 
 
-def loadByGroup(cur, tags, valueListDict, cond=None, filename=None):
+def loadAndSaveByGroup(cur, tags, valueListDict, cond=None, filename=None, dstdir=''):
 
     if len(tags) == 0:
         cur.execute('SELECT path FROM dicom WHERE ' + cond)
         paths = cur.fetchall()
-        print (paths)
-        # 
-        # load files
-        #
-        #loadablesByPlugin, loadEnabled = DICOMLib.getLoadablesFromFileLists(fileLists)
+        if len(paths) == 0:
+            return
+        filelist = []
+        for p in paths:
+            filelist.append(str(p[0]))
+            
+        loadablesByPlugin, loadEnabled = DICOMLib.getLoadablesFromFileLists([filelist])
+        nodeIds = DICOMLib.loadLoadables(loadablesByPlugin)
+        idx = 0
+        for id in nodeIds:
+            node = slicer.mrmlScene.GetNodeByID(id)
+            if node == None:
+                continue
+
+            # Note: slicer.util.saveNode did not work. Instead, we manually setup storageNode
+            #       save the file
+            nodeName = filename + "_" + str(idx)
+            path = dstdir + "/" + nodeName + '.nrrd'
+            print("Saving file: " + path)
+            storageNode = node.CreateDefaultStorageNode()
+            storageNode.SetFileName(path)
+            storageNode.WriteData(node)
+            
+            #slicer.util.saveNode(node, path)
+            slicer.mrmlScene.RemoveNode(node)
+            idx = idx + 1
+            
         return
 
     tag = 'x' + tags[0].replace(',', '')
@@ -136,27 +157,26 @@ def loadByGroup(cur, tags, valueListDict, cond=None, filename=None):
             filename2 = 'OUT-' + value
         else:
             filename2 = filename + '-' + value
-        loadByGroup(cur, tags2, valueListDict, cond2, filename2)
+        loadAndSaveByGroup(cur, tags2, valueListDict, cond2, filename2, dstdir)
 
     
 
 def convertDicomToNrrdBySubdirectory(srcdir, dstdir, tags):
-
-    #con = sqlite3.connect(':memory:')
-    con = sqlite3.connect('TestDB.db')
+    
+    con = sqlite3.connect(':memory:')
+    #con = sqlite3.connect('TestDB.db')
     cur = con.cursor()
     
-    #buildFilePathDBByTags(con, srcdir, tags, True)
-
+    buildFilePathDBByTags(con, srcdir, tags, True)
+     
     # Generate a list of values for each tag
     valueListDict = {}
     for tag in tags:
         colName = 'x' + tag.replace(',', '')
         cur.execute('SELECT ' + colName + ' FROM dicom GROUP BY ' + colName)
         valueListDict[colName] = cur.fetchall()
-
-
-    loadByGroup(cur, tags, valueListDict)
+    
+    loadAndSaveByGroup(cur, tags, valueListDict, None, None, dstdir)
     
 
 
@@ -185,7 +205,6 @@ def main(argv):
 
     dirDict = {}
     
-    #extractDICOMByTag(srcdir[0], tmpdir, args.tags, args.recursive, False, None, args.preserve)
     print(args.tags)
     
     convertDicomToNrrdBySubdirectory(srcdir, dstdir, args.tags)
