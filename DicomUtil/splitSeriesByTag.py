@@ -1,38 +1,40 @@
 import argparse, sys, shutil, os, logging
 import qt, ctk, slicer
-#import tempfile
 import sqlite3
 import pydicom
 import DICOMLib
-#from DICOMLib.DICOMUtils import TemporaryDICOMDatabase
-#from slicer.ScriptedLoadableModule import *
 
 #  Usage:
 #
-#  $ /path/to/Slicer  --launch PythonSlicer --no-main-window --no-splash --python-script splitSeriesByTag.py -- -i DSC-DICOM -o DSC-mpReview
+#  $ /path/to/Slicer  --no-main-window --no-splash --python-script splitSeriesByTag.py  \\
+#         [-h] [-r] TAG [TAG ...] SRC_DIR DST_DIR
+#
+#  Aarguments:
+#         TAG:       DICOM Tag (see below)
+#         SRC_DIR:   Source directory that contains DICOM files.
+#         DST_DIR:   Destination directory to save NRRD files.
 #
 #  Dependencies:
 #  This script calls functions in dicom_separate_by_tag.py. Make sure to include the path
 #  to the script in the PYTHONPATH environment variable.
 #
-# DICOM Tags:
-# - General
-#  - (0008,103e) : SeriesDescription
-#  - (0010,0010) : PatientsName
-#  - (0020,0010) : StudyID
-#  - (0020,0011) : SeriesNumber
-#  - (0020,0037) : ImageOrientationPatient
-#  - (0008,0032) : AcquisitionTime
-#
-# - Siemens MR Header
-#  - (0051,100f) : Coil element (Siemens)
-#  - (0051,1016) : Real/Imaginal (e.x. "R/DIS2D": real; "P/DIS2D": phase)
+#  Examples of DICOM Tags:
+#   - General
+#    - (0008,103e) : SeriesDescription
+#    - (0010,0010) : PatientsName
+#    - (0020,0010) : StudyID
+#    - (0020,0011) : SeriesNumber
+#    - (0020,0037) : ImageOrientationPatient
+#    - (0008,0032) : AcquisitionTime
+#   
+#   - Siemens MR Header
+#    - (0051,100f) : Coil element (Siemens)
+#    - (0051,1016) : Real/Imaginal (e.x. "R/DIS2D": real; "P/DIS2D": phase)
 
 
 #
 # Match DICOM attriburtes
 #
-
 def getDICOMAttribute(con, path, tags):
 
     dataset = None
@@ -53,7 +55,8 @@ def getDICOMAttribute(con, path, tags):
                 insertStr = insertStr + ',' + "'" + str(element.value) + "'"
                 
     return insertStr;
-                
+
+
 #
 # Convert attribute to folder name (Remove special characters that cannot be
 # included in a path name)
@@ -65,6 +68,10 @@ def removeSpecialCharacter(v):
 
     return removed
 
+
+#
+# Concatenate column names
+#
 def concatColNames(tags):
 
     r = ''
@@ -76,7 +83,9 @@ def concatColNames(tags):
             r = r + ',' + 'x' + key + ' text'
     return r;
     
-
+#
+# Build a file path database based on the DICOM tags
+#
 def buildFilePathDBByTags(con, srcDir, tags, fRecursive=True):
 
     # Create a table
@@ -107,6 +116,9 @@ def buildFilePathDBByTags(con, srcDir, tags, fRecursive=True):
     con.commit()
 
 
+#
+# Process the source directory recursively to convert the DICOM files to NRRD files.
+#
 def loadAndSaveByGroup(cur, tags, valueListDict, cond=None, filename=None, dstdir=''):
 
     if len(tags) == 0:
@@ -141,6 +153,8 @@ def loadAndSaveByGroup(cur, tags, valueListDict, cond=None, filename=None, dstdi
             
         return
 
+    # Note: We add prefix 'x' to the DICOM tag as the DICOM tags are recognized as intenger
+    #       by SQLight
     tag = 'x' + tags[0].replace(',', '')
     values = list(valueListDict[tag])
     tags2 = tags[1:]
@@ -159,8 +173,9 @@ def loadAndSaveByGroup(cur, tags, valueListDict, cond=None, filename=None, dstdi
             filename2 = filename + '-' + value
         loadAndSaveByGroup(cur, tags2, valueListDict, cond2, filename2, dstdir)
 
-    
-
+#
+# The function to convert DICOM files to NRRD files
+#
 def convertDicomToNrrdBySubdirectory(srcdir, dstdir, tags):
     
     con = sqlite3.connect(':memory:')
@@ -178,7 +193,6 @@ def convertDicomToNrrdBySubdirectory(srcdir, dstdir, tags):
     
     loadAndSaveByGroup(cur, tags, valueListDict, None, None, dstdir)
     
-
 
 def main(argv):
   try:
@@ -198,15 +212,7 @@ def main(argv):
     dstdir = args.dst[0]
 
     # Make the destination directory, if it does not exists.
-    #os.makedirs(dstdir[0], exist_ok=True)
-
-    # Create a temporary directory
-    #tempdir = tempfile.TemporaryDirectory()
-
-    dirDict = {}
-    
-    print(args.tags)
-    
+    os.makedirs(dstdir[0], exist_ok=True)
     convertDicomToNrrdBySubdirectory(srcdir, dstdir, args.tags)
 
 
