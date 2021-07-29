@@ -150,7 +150,6 @@ def loadAndSaveByGroup(cur, tags, valueListDict, prefix, cond=None, filename=Non
             #slicer.util.saveNode(node, path)
             slicer.mrmlScene.RemoveNode(node)
             idx = idx + 1
-            
         return
 
     # Note: We add prefix 'x' to the DICOM tag as the DICOM tags are recognized as intenger
@@ -158,7 +157,7 @@ def loadAndSaveByGroup(cur, tags, valueListDict, prefix, cond=None, filename=Non
     tag = 'x' + tags[0].replace(',', '')
     values = list(valueListDict[tag])
     tags2 = tags[1:]
-    
+
     for tp in values:
         value = tp[0]
         cond2 = ''
@@ -172,6 +171,7 @@ def loadAndSaveByGroup(cur, tags, valueListDict, prefix, cond=None, filename=Non
         else:
             filename2 = filename + '-' + value
         loadAndSaveByGroup(cur, tags2, valueListDict, prefix, cond2, filename2, dstdir)
+
 
 #
 # The function to convert DICOM files to NRRD files
@@ -217,12 +217,14 @@ def main(argv):
     # Make the destination directory, if it does not exists.
     os.makedirs(dstdir[0], exist_ok=True)
     convertDicomToNrrdBySubdirectory(srcdir, dstdir, args.tags, args.prefix)
-
+    sys.exit()
 
   except Exception as e:
     print(e)
     sys.exit()
 
+
 if __name__ == "__main__":
   main(sys.argv[1:])
+  
 
