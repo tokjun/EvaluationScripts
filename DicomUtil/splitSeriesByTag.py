@@ -167,9 +167,9 @@ def loadAndSaveByGroup(cur, tags, valueListDict, prefix, cond=None, filename=Non
         else:
             cond2 = cond + ' AND ' + tag + ' == ' + "'" + value + "'"
         if filename==None:
-            filename2 = str(prefix) + value
+            filename2 = str(prefix) + value.replace('/','_')
         else:
-            filename2 = filename + '-' + value
+            filename2 = filename + '-' + value.replace('/','_')
         loadAndSaveByGroup(cur, tags2, valueListDict, prefix, cond2, filename2, dstdir)
 
 
