@@ -47,13 +47,17 @@ def getDICOMAttribute(con, path, tags):
     insertStr = ''
     for tag in tags:
         key = tag.replace(',', '')
+        element = ''
         if key in dataset:
-            element = dataset[key]
-            if insertStr == '':
-                insertStr = "'" + str(element.value) + "'"
-            else:
-                insertStr = insertStr + ',' + "'" + str(element.value) + "'"
-                
+            element = str(dataset[key].value)
+        else:
+            element = 'xx'
+            
+        if insertStr == '':
+            insertStr = "'" + element + "'"
+        else:
+            insertStr = insertStr + ',' + "'" + element + "'"
+
     return insertStr;
 
 
@@ -96,19 +100,17 @@ def buildFilePathDBByTags(con, srcDir, tags, fRecursive=True):
     attrList = []
     
     print("Processing directory: %s..." % srcDir)
-    
     for root, dirs, files in os.walk(srcDir):
         for file in files:
             srcFilePath = os.path.join(root, file)
             insertStr = getDICOMAttribute(con, srcFilePath, tags)
             if insertStr == None:
-                print("Could not obtain attributes for %s" % srcFilePath)
                 continue
             else:
                 # Add the file path
                 insertStr = insertStr + ',' + "'" + srcFilePath + "'"
                 con.execute('INSERT INTO dicom VALUES (' + insertStr + ')')
-                #print('INSERT INTO dicom VALUES (' + insertStr + ')')
+
     
         if fRecursive == False:
             break
