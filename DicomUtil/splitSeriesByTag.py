@@ -47,13 +47,17 @@ def getDICOMAttribute(con, path, tags):
     insertStr = ''
     for tag in tags:
         key = tag.replace(',', '')
+        element = ''
         if key in dataset:
-            element = dataset[key]
-            if insertStr == '':
-                insertStr = "'" + str(element.value) + "'"
-            else:
-                insertStr = insertStr + ',' + "'" + str(element.value) + "'"
-                
+            element = str(dataset[key].value)
+        else:
+            element = 'xx'
+            
+        if insertStr == '':
+            insertStr = "'" + element + "'"
+        else:
+            insertStr = insertStr + ',' + "'" + element + "'"
+
     return insertStr;
 
 
@@ -96,19 +100,17 @@ def buildFilePathDBByTags(con, srcDir, tags, fRecursive=True):
     attrList = []
     
     print("Processing directory: %s..." % srcDir)
-    
     for root, dirs, files in os.walk(srcDir):
         for file in files:
             srcFilePath = os.path.join(root, file)
             insertStr = getDICOMAttribute(con, srcFilePath, tags)
             if insertStr == None:
-                print("Could not obtain attributes for %s" % srcFilePath)
                 continue
             else:
                 # Add the file path
                 insertStr = insertStr + ',' + "'" + srcFilePath + "'"
                 con.execute('INSERT INTO dicom VALUES (' + insertStr + ')')
-                #print('INSERT INTO dicom VALUES (' + insertStr + ')')
+
     
         if fRecursive == False:
             break
@@ -119,7 +121,7 @@ def buildFilePathDBByTags(con, srcDir, tags, fRecursive=True):
 #
 # Process the source directory recursively to convert the DICOM files to NRRD files.
 #
-def loadAndSaveByGroup(cur, tags, valueListDict, cond=None, filename=None, dstdir=''):
+def loadAndSaveByGroup(cur, tags, valueListDict, prefix, cond=None, filename=None, dstdir=''):
 
     if len(tags) == 0:
         cur.execute('SELECT path FROM dicom WHERE ' + cond)
@@ -150,7 +152,6 @@ def loadAndSaveByGroup(cur, tags, valueListDict, cond=None, filename=None, dstdi
             #slicer.util.saveNode(node, path)
             slicer.mrmlScene.RemoveNode(node)
             idx = idx + 1
-            
         return
 
     # Note: We add prefix 'x' to the DICOM tag as the DICOM tags are recognized as intenger
@@ -158,7 +159,7 @@ def loadAndSaveByGroup(cur, tags, valueListDict, cond=None, filename=None, dstdi
     tag = 'x' + tags[0].replace(',', '')
     values = list(valueListDict[tag])
     tags2 = tags[1:]
-    
+
     for tp in values:
         value = tp[0]
         cond2 = ''
@@ -168,15 +169,16 @@ def loadAndSaveByGroup(cur, tags, valueListDict, cond=None, filename=None, dstdi
         else:
             cond2 = cond + ' AND ' + tag + ' == ' + "'" + value + "'"
         if filename==None:
-            filename2 = 'OUT-' + value
+            filename2 = str(prefix) + value.replace('/','_')
         else:
-            filename2 = filename + '-' + value
-        loadAndSaveByGroup(cur, tags2, valueListDict, cond2, filename2, dstdir)
+            filename2 = filename + '-' + value.replace('/','_')
+        loadAndSaveByGroup(cur, tags2, valueListDict, prefix, cond2, filename2, dstdir)
+
 
 #
 # The function to convert DICOM files to NRRD files
 #
-def convertDicomToNrrdBySubdirectory(srcdir, dstdir, tags):
+def convertDicomToNrrdBySubdirectory(srcdir, dstdir, tags, prefix):
     
     con = sqlite3.connect(':memory:')
     #con = sqlite3.connect('TestDB.db')
@@ -191,7 +193,7 @@ def convertDicomToNrrdBySubdirectory(srcdir, dstdir, tags):
         cur.execute('SELECT ' + colName + ' FROM dicom GROUP BY ' + colName)
         valueListDict[colName] = cur.fetchall()
     
-    loadAndSaveByGroup(cur, tags, valueListDict, None, None, dstdir)
+    loadAndSaveByGroup(cur, tags, valueListDict, prefix, None, None, dstdir)
     
 
 def main(argv):
@@ -203,9 +205,12 @@ def main(argv):
                         help='source directory')
     parser.add_argument('dst', metavar='DST_DIR', type=str, nargs=1,
                         help='destination directory')
+    parser.add_argument('-p', dest='prefix', default='OUT',
+                        help='File name prefix for the output files')
     parser.add_argument('-r', dest='recursive', action='store_const',
                         const=True, default=False,
                         help='search the source directory recursively')
+    
     args = parser.parse_args(argv)
 
     srcdir = args.src[0]
@@ -213,13 +218,15 @@ def main(argv):
 
     # Make the destination directory, if it does not exists.
     os.makedirs(dstdir[0], exist_ok=True)
-    convertDicomToNrrdBySubdirectory(srcdir, dstdir, args.tags)
-
+    convertDicomToNrrdBySubdirectory(srcdir, dstdir, args.tags, args.prefix)
+    sys.exit()
 
   except Exception as e:
     print(e)
-  sys.exit()
+    sys.exit()
+
 
 if __name__ == "__main__":
   main(sys.argv[1:])
+  
 
