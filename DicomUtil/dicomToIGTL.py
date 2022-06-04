@@ -119,27 +119,14 @@ def buildFilePathDBByTags(con, srcDir, tags, fRecursive=True):
 
 def exportToIGTL(filelist, sock=None):
 
-    
-    #dtype              = param['dtype']
-    #dimension          = param['dimension']
-    #spacing            = param['spacing']
-    #name               = param['name']
-    #numberOfComponents = param['numberOfComponents']
-    #endian             = param['endian']
-    #matrix             = param['matrix']
-    #binary             = param['binary']
-    #binaryOffset       = param['binaryOffset']
-
-    # Obtain the image info from the first image
-
     nSlices = len(filelist)
 
     # Generate a list of slice positions
     slices = []
-    for i in range(nSlices):
+    for filename in filelist:
         dataset = None
         try:
-            dataset = pydicom.dcmread(filelist[i], specific_tags=None)
+            dataset = pydicom.dcmread(filename, specific_tags=None)
         except pydicom.errors.InvalidDicomError:
             print("Error: Invalid DICOM file: " + path)
             return None
@@ -175,56 +162,48 @@ def exportToIGTL(filelist, sock=None):
 
     slices.sort(key=keyfunc)
 
-    # Generate a 3D matrix
-    data = np.array([])
+    ## Generate a 3D matrix
+    #data = np.array([])
+    #
+    #print(slices[0]['pixelArray'].dtype)
+    #data = np.atleast_3d(np.transpose(slices[0]['pixelArray']))
+    #for sl in slices[1:]:
+    #    data = np.append(data, np.atleast_3d(np.transpose(sl['pixelArray'])), axis=2)
 
-    print(slices[0]['pixelArray'].dtype)
-    data = np.atleast_3d(np.transpose(slices[0]['pixelArray']))
-    for sl in slices[1:]:
-        data = np.append(data, np.atleast_3d(np.transpose(sl['pixelArray'])), axis=2)
+    dim = np.array([slices[0]['columns'], slices[0]['rows'], len(slices)])
         
-    
-    #data = data.reshape((slices[0]['columns'], slices[0]['rows'], len(slices)))
-        
-    seriesNumber            = dataset['00200011'].value # (0020,0011) : SeriesNumber
-    print(seriesNumber)
-
     sliceSpacing = slices[1]['sliceLocation'] - slices[0]['sliceLocation']
     spacing = slices[0]['spacing']
     spacing = np.append(spacing, sliceSpacing)
-    print(spacing)
 
+    # Image orientation matrix
+    # The orientation matrix is defined as N = [n1, n2, n3], where n1, n2, and n3 are
+    # normal column vectors representing the directions of the i, j, and k indicies.
     norm = slices[0]['orientation'].reshape((2,3))
     norm = np.append(norm, np.cross(norm[0], norm[1]).reshape((1,3)), axis=0)
     norm = np.transpose(norm)
+    
+    # Switch from LPS to RAS
+    lpsToRas = np.transpose(np.array([[-1., -1.,1.]]))
+    norm = norm * lpsToRas
 
-    header = {}
-    header['space directions'] = np.transpose(norm * spacing)
-    header['space origin'] = slices[0]['position']
+    # Location of the first voxel in RAS
+    pos = slices[0]['position'].reshape(3,1) * lpsToRas
 
-    nbytes = slices[0]['bitsAllocated'] / 8
-    nrrdType = ''
-    if nbytes == 1:
-        nrrdType = 'int8'
-    elif nbytes == 2:
-        nrrdType = 'short'
-    elif nbytes == 4:
-        nrrdType = 'int'
+    # Location of the the image center 
+    # OpenIGTLink uses the location of the volume center while SliceLocation in DICOM is the position of the first voxel.
+    offset = norm * (spacing * (dim-1.0)/2.0)
+    pos = pos + offset[:,[0]] + offset[:,[1]] + offset[:,[2]]
 
-    #header['type']      = nrrdType
-    #header['dimension'] = 3
-    header['space']     = 'left-posterior-superior'
-    header['kinds']      = ['domain', 'domain', 'domain']
-    header['encoding']  = 'raw'
+    nbytes  = slices[0]['bitsAllocated'] / 8
+    typestr = str(slices[0]['pixelArray'].dtype)
 
-    seriesDescription       = dataset['0008103e'].value # (0008,103e) : SeriesDescription
-    patientsName            = dataset['00100010'].value # (0010,0010) : PatientsName
-    studyID                 = dataset['00200010'].value # (0020,0010) : StudyID
+    #seriesDescription       = dataset['0008103e'].value # (0008,103e) : SeriesDescription
+    #patientsName            = dataset['00100010'].value # (0010,0010) : PatientsName
+    #studyID                 = dataset['00200010'].value # (0020,0010) : StudyID
     seriesNumber            = dataset['00200011'].value # (0020,0011) : SeriesNumber
-    imageOrientationPatient = dataset['00200037'].value # (0020,0037) : ImageOrientationPatient
-    acquisitionTime         = dataset['00080032'].value # (0008,0032) : AcquisitionTime
-    #print('%s: %s\t%s\t%s\t%d\n' % (seriesNumber, seriesDescription, imageOrientationPatient, acquisitionTime, nSlices))
-    #print('%s: %s\t%s\n' % (seriesNumber, pos[0], ori[0]))
+    #imageOrientationPatient = dataset['00200037'].value # (0020,0037) : ImageOrientationPatient
+    #acquisitionTime         = dataset['00080032'].value # (0008,0032) : AcquisitionTime
 
     ## Create an OpenIGTLink message
     DataTypeTable = {
@@ -237,45 +216,40 @@ def exportToIGTL(filelist, sock=None):
         'float32': [10,4],   #TYPE_FLOAT32 = 10, 4 bytes 
         'float64': [11,8],   #TYPE_FLOAT64 = 11, 8 bytes
     }
-    
 
     imageMsg = igtl.ImageMessage.New()
-    imageMsg.SetDimensions(data.shape[0], data.shape[1], data.shape[2])
+    #imageMsg.SetDimensions(data.shape[0], data.shape[1], data.shape[2])
+    imageMsg.SetDimensions(int(dim[0]), int(dim[1]), int(dim[2]))
 
     typeid = 0
-    if str(data.dtype) in DataTypeTable:
-        typeid = DataTypeTable[str(data.dtype)][0]
+    if typestr in DataTypeTable:
+        typeid = DataTypeTable[typestr][0]
     else:
         print('Data type: %s is not compatible with OpenIGTLink.' % str(data.dtype))
         return
+    
     imageMsg.SetScalarType(typeid)
     imageMsg.SetDeviceName('Image %d' % seriesNumber)
     imageMsg.SetNumComponents(1)
     imageMsg.SetEndian(2) # little is 2, big is 1
+    imageMsg.SetSpacing(spacing[0], spacing[1], spacing[2])
     imageMsg.AllocateScalars()
 
-    # Copy the binary data
-    igtl.copyBytesToPointer(data.tobytes(), imageMsg.GetScalarPointer())
-    imageMsg.SetSpacing(spacing[0], spacing[1], spacing[2])
-
-    
-    print(norm)
-    print(slices[0]['position'].reshape(3,1))
-    print(np.array([[0,0,0,1]]))
-    matrixNP = np.concatenate((norm, slices[0]['position'].reshape(3,1)), axis=1)
+    matrixNP = np.concatenate((norm, pos), axis=1)
     matrixNP = np.concatenate((matrixNP, np.array([[0,0,0,1]])), axis=0)
-    print(matrixNP)
     matrix = matrixNP.tolist()
     
     imageMsg.SetMatrix(matrix)
+    
+    # Copy the binary data
+    offset = 0
+    for sl in slices:
+        igtl.copyBytesToPointer(sl['pixelArray'].tobytes(), igtl.offsetPointer(imageMsg.GetScalarPointer(), offset))
+        offset = offset + len(sl['pixelArray'].tobytes())
+    
     imageMsg.Pack()
     
     sock.Send(imageMsg.GetPackPointer(), imageMsg.GetPackSize())
-    
-    #if dst:
-    #    nrrd.write('%s/output%d.nrrd' % (dst, seriesNumber), data, header)
-    #else:
-    #    nrrd.write('output%d.nrrd' % (seriesNumber), data, header)
 
     
 def groupBySeriesAndExport(cur, tags, valueListDict, cond=None, filename=None, sock=None):
