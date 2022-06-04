@@ -7,8 +7,7 @@ import nrrd
 
 #  Usage:
 #
-#  $ /path/to/Slicer  --no-main-window --no-splash --python-script splitSeriesByTag.py  \\
-#         [-h] [-r] TAG [TAG ...] SRC_DIR DST_DIR
+#  $ python splitSeriesByTag.py  [-h] [-r] TAG [TAG ...] SRC_DIR DST_DIR
 #
 #  Aarguments:
 #         TAG:       DICOM Tag (see below)
@@ -18,6 +17,7 @@ import nrrd
 #  Dependencies:
 #  This script calls functions in dicom_separate_by_tag.py. Make sure to include the path
 #  to the script in the PYTHONPATH environment variable.
+#  This script requires 'pydicom' and 'pynrrd.'
 #
 #  Examples of DICOM Tags:
 #   - General
@@ -117,7 +117,7 @@ def buildFilePathDBByTags(con, srcDir, tags, fRecursive=True):
     con.commit()
 
 
-def exportNrrd(filelist):
+def exportNrrd(filelist, dst=None):
     # Obtain the image info from the first image
 
     nSlices = len(filelist)
@@ -155,8 +155,6 @@ def exportNrrd(filelist):
         else:
             sl['pixelArray'] = (dataset.pixel_array*rescaleSlope + rescaleIntercept).astype('int16')
             
-
-        
         slices.append(sl)
 
     # Sort the slices
@@ -216,11 +214,13 @@ def exportNrrd(filelist):
     #print('%s: %s\t%s\t%s\t%d\n' % (seriesNumber, seriesDescription, imageOrientationPatient, acquisitionTime, nSlices))
     #print('%s: %s\t%s\n' % (seriesNumber, pos[0], ori[0]))
 
-    nrrd.write('output%d.nrrd' % seriesNumber, data, header)
-
+    if dst:
+        nrrd.write('%s/output%d.nrrd' % (dst, seriesNumber), data, header)
+    else:
+        nrrd.write('output%d.nrrd' % (seriesNumber), data, header)
 
     
-def groupSeriesAndExport(cur, tags, valueListDict, cond=None, filename=None):
+def groupBySeriesAndExport(cur, tags, valueListDict, cond=None, filename=None, dst=None):
 
     if len(tags) == 0:
         cur.execute('SELECT path FROM dicom WHERE ' + cond)
@@ -231,7 +231,7 @@ def groupSeriesAndExport(cur, tags, valueListDict, cond=None, filename=None):
         for p in paths:
             filelist.append(str(p[0]))
             
-        exportNrrd(filelist)
+        exportNrrd(filelist, dst)
 
         return
 
@@ -253,7 +253,7 @@ def groupSeriesAndExport(cur, tags, valueListDict, cond=None, filename=None):
             filename2 = 'OUT-' + value
         else:
             filename2 = filename + '-' + value
-        groupSeriesAndExport(cur, tags2, valueListDict, cond2, filename2)
+        groupBySeriesAndExport(cur, tags2, valueListDict, cond2, filename2, dst=dst)
 
 
 def main(argv):
@@ -264,8 +264,8 @@ def main(argv):
                             help='DICOM tags(e.g. "0020,000E")')
         parser.add_argument('src', metavar='SRC_DIR', type=str, nargs=1,
                             help='source directory')
-        #parser.add_argument('dst', metavar='DST_DIR', type=str, nargs=1,
-        #                    help='destination directory')
+        parser.add_argument('dst', metavar='DST_DIR', type=str, nargs=1,
+                            help='destination directory')
         parser.add_argument('-r', dest='recursive', action='store_const',
                             const=True, default=False,
                             help='search the source directory recursively')
@@ -276,6 +276,7 @@ def main(argv):
 
     tags   = args.tags
     srcdir = args.src[0]
+    dstdir = args.dst[0]
 
     con = sqlite3.connect(':memory:')
     #con = sqlite3.connect('TestDB.db')
@@ -289,8 +290,9 @@ def main(argv):
         colName = 'x' + tag.replace(',', '')
         cur.execute('SELECT ' + colName + ' FROM dicom GROUP BY ' + colName)
         valueListDict[colName] = cur.fetchall()
-    
-    groupSeriesAndExport(cur, tags, valueListDict, None, None)
+
+    os.makedirs(dstdir, exist_ok=True)        
+    groupBySeriesAndExport(cur, tags, valueListDict, cond=None, filename=None, dst=dstdir)
 
     sys.exit()
 
