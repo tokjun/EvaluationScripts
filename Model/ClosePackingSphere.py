@@ -19,7 +19,7 @@ from slicer.ScriptedLoadableModule import *
 import SimpleITK as sitk
 import sitkUtils
 
-def placeSphericalModels(modelNode, posArray, radius):
+def placeSphericalModels(modelNode, posArray, radius, thRes=10, phRes=10):
 
   apd = vtk.vtkAppendPolyData()
     
@@ -28,6 +28,8 @@ def placeSphericalModels(modelNode, posArray, radius):
     sphere = vtk.vtkSphereSource()
     sphere.SetRadius(radius)
     sphere.SetCenter(pos)
+    sphere.SetThetaResolution(thRes)
+    sphere.SetPhiResolution(phRes)
     sphere.Update()
     apd.AddInputConnection(sphere.GetOutputPort())
         
@@ -51,7 +53,7 @@ def generateSimpleHCPLattice(origin, radius, size):
     return posArray
     
 
-def packEqualSpheres(origin, distance, radius, size):
+def packEqualSpheres(origin, distance, radius, size, thRes=10, phRes=10):
 
   #origin = [0.0, 0.0, 0.0]
   #distance = 5.0
@@ -62,7 +64,7 @@ def packEqualSpheres(origin, distance, radius, size):
   modelNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLModelNode')
   modelNode.SetName('ClosePackedSpheres')
   
-  placeSphericalModels(modelNode, posArray, radius)
+  placeSphericalModels(modelNode, posArray, radius, thRes, phRes)
   
 
 
