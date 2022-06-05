@@ -15,8 +15,6 @@ import openigtlink as igtl
 #         DST_DIR:   Destination directory to save NRRD files.
 #
 #  Dependencies:
-#  This script calls functions in dicom_separate_by_tag.py. Make sure to include the path
-#  to the script in the PYTHONPATH environment variable.
 #  This script requires 'pydicom' and 'pynrrd.'
 #
 #  Examples of DICOM Tags:
@@ -117,7 +115,7 @@ def buildFilePathDBByTags(con, srcDir, tags, fRecursive=True):
     con.commit()
 
 
-def exportToIGTL(filelist, sock=None):
+def exportToIGTL(filelist, sock=None, imgname=None):
 
     nSlices = len(filelist)
 
@@ -229,7 +227,10 @@ def exportToIGTL(filelist, sock=None):
         return
     
     imageMsg.SetScalarType(typeid)
-    imageMsg.SetDeviceName('Image %d' % seriesNumber)
+    if imgname == None:
+        imgname = 'IGTL_%d' % seriesNumber
+    
+    imageMsg.SetDeviceName(imgname)
     imageMsg.SetNumComponents(1)
     imageMsg.SetEndian(2) # little is 2, big is 1
     imageMsg.SetSpacing(spacing[0], spacing[1], spacing[2])
@@ -252,7 +253,7 @@ def exportToIGTL(filelist, sock=None):
     sock.Send(imageMsg.GetPackPointer(), imageMsg.GetPackSize())
 
     
-def groupBySeriesAndExport(cur, tags, valueListDict, cond=None, filename=None, sock=None):
+def groupBySeriesAndExport(cur, tags, valueListDict, cond=None, imgname=None, sock=None):
 
     if len(tags) == 0:
         cur.execute('SELECT path FROM dicom WHERE ' + cond)
@@ -263,7 +264,7 @@ def groupBySeriesAndExport(cur, tags, valueListDict, cond=None, filename=None, s
         for p in paths:
             filelist.append(str(p[0]))
             
-        exportToIGTL(filelist, sock=sock)
+        exportToIGTL(filelist, sock=sock, imgname=imgname)
 
         return
 
@@ -276,16 +277,16 @@ def groupBySeriesAndExport(cur, tags, valueListDict, cond=None, filename=None, s
     for tp in values:
         value = tp[0]
         cond2 = ''
-        filename2 = ''
+        imgname2 = ''
         if cond==None:
             cond2 = tag + ' == ' + "'" + value + "'"
         else:
             cond2 = cond + ' AND ' + tag + ' == ' + "'" + value + "'"
-        if filename==None:
-            filename2 = 'OUT-' + value
+        if imgname==None:
+            imgname2 = 'IGTL-' + value
         else:
-            filename2 = filename + '-' + value
-        groupBySeriesAndExport(cur, tags2, valueListDict, cond2, filename2, sock=sock)
+            imgname2 = imgname + '-' + value
+        groupBySeriesAndExport(cur, tags2, valueListDict, cond2, imgname2, sock=sock)
 
 
 def main(argv):
@@ -332,7 +333,7 @@ def main(argv):
     ret = clientSocket.ConnectToServer(ip,int(port))
     if ret == 0:
         print('Connection successful.')
-        groupBySeriesAndExport(cur, tags, valueListDict, cond=None, filename=None, sock=clientSocket)
+        groupBySeriesAndExport(cur, tags, valueListDict, cond=None, imgname=None, sock=clientSocket)
     else:
         print('Could not connect to the server.')
 

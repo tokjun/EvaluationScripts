@@ -15,8 +15,6 @@ import DICOMLib
 #         DST_DIR:   Destination directory to save NRRD files.
 #
 #  Dependencies:
-#  This script calls functions in dicom_separate_by_tag.py. Make sure to include the path
-#  to the script in the PYTHONPATH environment variable.
 #
 #  Examples of DICOM Tags:
 #   - General

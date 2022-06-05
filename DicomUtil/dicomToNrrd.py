@@ -15,8 +15,6 @@ import nrrd
 #         DST_DIR:   Destination directory to save NRRD files.
 #
 #  Dependencies:
-#  This script calls functions in dicom_separate_by_tag.py. Make sure to include the path
-#  to the script in the PYTHONPATH environment variable.
 #  This script requires 'pydicom' and 'pynrrd.'
 #
 #  Examples of DICOM Tags:
@@ -117,7 +115,7 @@ def buildFilePathDBByTags(con, srcDir, tags, fRecursive=True):
     con.commit()
 
 
-def exportNrrd(filelist, dst=None):
+def exportNrrd(filelist, dst=None, filename=None):
     # Obtain the image info from the first image
 
     nSlices = len(filelist)
@@ -214,10 +212,12 @@ def exportNrrd(filelist, dst=None):
     #print('%s: %s\t%s\t%s\t%d\n' % (seriesNumber, seriesDescription, imageOrientationPatient, acquisitionTime, nSlices))
     #print('%s: %s\t%s\n' % (seriesNumber, pos[0], ori[0]))
 
+    if filename == None:
+        filename = 'output' + str(seriesNumber)
     if dst:
-        nrrd.write('%s/output%d.nrrd' % (dst, seriesNumber), data, header)
+        nrrd.write('%s/%s.nrrd' % (dst, filename), data, header)
     else:
-        nrrd.write('output%d.nrrd' % (seriesNumber), data, header)
+        nrrd.write('%s.nrrd' % (filename), data, header)
 
     
 def groupBySeriesAndExport(cur, tags, valueListDict, cond=None, filename=None, dst=None):
@@ -231,7 +231,7 @@ def groupBySeriesAndExport(cur, tags, valueListDict, cond=None, filename=None, d
         for p in paths:
             filelist.append(str(p[0]))
             
-        exportNrrd(filelist, dst)
+        exportNrrd(filelist, dst, filename)
 
         return
 
