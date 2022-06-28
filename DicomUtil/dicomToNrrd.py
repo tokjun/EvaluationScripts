@@ -220,7 +220,7 @@ def exportNrrd(filelist, dst=None, filename=None):
         nrrd.write('%s.nrrd' % (filename), data, header)
 
     
-def groupBySeriesAndExport(cur, tags, valueListDict, cond=None, filename=None, dst=None):
+def groupBySeriesAndExport(cur, tags, valueListDict, cond=None, filename=None, dst=None, prefix=None):
 
     if len(tags) == 0:
         cur.execute('SELECT path FROM dicom WHERE ' + cond)
@@ -230,7 +230,8 @@ def groupBySeriesAndExport(cur, tags, valueListDict, cond=None, filename=None, d
         filelist = []
         for p in paths:
             filelist.append(str(p[0]))
-            
+
+        print(filename)
         exportNrrd(filelist, dst, filename)
 
         return
@@ -250,9 +251,9 @@ def groupBySeriesAndExport(cur, tags, valueListDict, cond=None, filename=None, d
         else:
             cond2 = cond + ' AND ' + tag + ' == ' + "'" + value + "'"
         if filename==None:
-            filename2 = 'OUT-' + value
+            filename2 = value.replace('/', '.')
         else:
-            filename2 = filename + '-' + value
+            filename2 = filename + '-' + value.replace('/', '.')
         groupBySeriesAndExport(cur, tags2, valueListDict, cond2, filename2, dst=dst)
 
 
