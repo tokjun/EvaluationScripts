@@ -46,12 +46,15 @@ def getDICOMAttribute(path, tags):
     insertStr = ''
     for tag in tags:
         key = tag.replace(',', '')
+        value = ''
         if key in dataset:
             element = dataset[key]
-            if insertStr == '':
-                insertStr = "'" + str(element.value) + "'"
-            else:
-                insertStr = insertStr + ',' + "'" + str(element.value) + "'"
+            value = element.value
+            
+        if insertStr == '':
+            insertStr = "'" + str(value) + "'"
+        else:
+            insertStr = insertStr + ',' + "'" + str(value) + "'"
                 
     return insertStr;
 
@@ -107,7 +110,7 @@ def buildFilePathDBByTags(con, srcDir, tags, fRecursive=True):
                 # Add the file path
                 insertStr = insertStr + ',' + "'" + srcFilePath + "'"
                 con.execute('INSERT INTO dicom VALUES (' + insertStr + ')')
-                #print('INSERT INTO dicom VALUES (' + insertStr + ')')
+
     
         if fRecursive == False:
             break
@@ -137,17 +140,22 @@ def exportNrrd(filelist, dst=None, filename=None):
             rescaleIntercept = 0
             rescaleSlope     = 1
 
-        sl = {
-            'position'       : np.array(dataset['00200032'].value), # ImagePositionPatient
-            'orientation'    : np.array(dataset['00200037'].value), # ImageOrientationPatient
-            'spacing'        : np.array(dataset['00280030'].value), # PixelSpacing
-            'sliceThickness' : dataset['00180050'].value, # SliceThickness
-            'rows'           : dataset['00280010'].value, # Rows
-            'columns'        : dataset['00280011'].value, # Columns
-            'sliceLocation'  : dataset['00201041'].value, # SliceLocation
-            'bitsAllocated'  : dataset['00280100'].value, # BitsAllocated
-            'instanceNumber' : dataset['00200013'].value, # InstanceNumber -- image number
-            }
+        try:
+            sl = {
+                'position'       : np.array(dataset['00200032'].value), # ImagePositionPatient
+                'orientation'    : np.array(dataset['00200037'].value), # ImageOrientationPatient
+                'spacing'        : np.array(dataset['00280030'].value), # PixelSpacing
+                'sliceThickness' : dataset['00180050'].value, # SliceThickness
+                'rows'           : dataset['00280010'].value, # Rows
+                'columns'        : dataset['00280011'].value, # Columns
+                'sliceLocation'  : dataset['00201041'].value, # SliceLocation
+                'bitsAllocated'  : dataset['00280100'].value, # BitsAllocated
+                'instanceNumber' : dataset['00200013'].value, # InstanceNumber -- image number
+                }
+        except KeyError:
+            print('KeyError: Missing geometric information. Skipping.')
+            return
+        
         if rescaleIntercept >= 0:
             sl['pixelArray'] = dataset.pixel_array*rescaleSlope + rescaleIntercept
         else:
@@ -164,7 +172,6 @@ def exportNrrd(filelist, dst=None, filename=None):
     # Generate a 3D matrix
     data = np.array([])
 
-    print(slices[0]['pixelArray'].dtype)
     data = np.atleast_3d(np.transpose(slices[0]['pixelArray']))
     for sl in slices[1:]:
         data = np.append(data, np.atleast_3d(np.transpose(sl['pixelArray'])), axis=2)
@@ -173,12 +180,13 @@ def exportNrrd(filelist, dst=None, filename=None):
     #data = data.reshape((slices[0]['columns'], slices[0]['rows'], len(slices)))
         
     seriesNumber            = dataset['00200011'].value # (0020,0011) : SeriesNumber
-    print(seriesNumber)
 
-    sliceSpacing = slices[1]['sliceLocation'] - slices[0]['sliceLocation']
+    sliceSpacing = sl['sliceThickness'] # for a single slice image
+    if len(slices) > 1:                 # for a multi-slice image
+        sliceSpacing = slices[1]['sliceLocation'] - slices[0]['sliceLocation']
+        
     spacing = slices[0]['spacing']
     spacing = np.append(spacing, sliceSpacing)
-    print(spacing)
 
     norm = slices[0]['orientation'].reshape((2,3))
     norm = np.append(norm, np.cross(norm[0], norm[1]).reshape((1,3)), axis=0)
@@ -220,7 +228,7 @@ def exportNrrd(filelist, dst=None, filename=None):
         nrrd.write('%s.nrrd' % (filename), data, header)
 
     
-def groupBySeriesAndExport(cur, tags, valueListDict, cond=None, filename=None, dst=None):
+def groupBySeriesAndExport(cur, tags, valueListDict, cond=None, filename=None, dst=None, prefix=None):
 
     if len(tags) == 0:
         cur.execute('SELECT path FROM dicom WHERE ' + cond)
@@ -230,7 +238,8 @@ def groupBySeriesAndExport(cur, tags, valueListDict, cond=None, filename=None, d
         filelist = []
         for p in paths:
             filelist.append(str(p[0]))
-            
+
+        print('Writing ' + dst + '/' + filename)
         exportNrrd(filelist, dst, filename)
 
         return
@@ -250,9 +259,9 @@ def groupBySeriesAndExport(cur, tags, valueListDict, cond=None, filename=None, d
         else:
             cond2 = cond + ' AND ' + tag + ' == ' + "'" + value + "'"
         if filename==None:
-            filename2 = 'OUT-' + value
+            filename2 = value.replace('/', '.')
         else:
-            filename2 = filename + '-' + value
+            filename2 = filename + '-' + value.replace('/', '.')
         groupBySeriesAndExport(cur, tags2, valueListDict, cond2, filename2, dst=dst)
 
 
