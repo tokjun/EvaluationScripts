@@ -4,7 +4,7 @@ import pydicom
 
 #  Usage:
 #
-#  $ /path/to/Slicer  --no-main-window --no-splash --python-script splitSeriesByTag.py  \\
+#  $ listSeriesByTag.py  \\
 #         [-h] [-r] TAG [TAG ...] SRC_DIR DST_DIR
 #
 #  Aarguments:
@@ -49,7 +49,7 @@ def getDICOMAttribute(path, tags):
                 insertStr = "'" + str(element.value) + "'"
             else:
                 insertStr = insertStr + ',' + "'" + str(element.value) + "'"
-
+                
     return insertStr;
 
 
@@ -97,7 +97,7 @@ def buildFilePathDBByTags(con, srcDir, tags, fRecursive=True):
         for file in files:
             srcFilePath = os.path.join(root, file)
             insertStr = getDICOMAttribute(srcFilePath, tags)
-            if insertStr == '':
+            if insertStr == None:
                 print("Could not obtain attributes for %s" % srcFilePath)
                 continue
             else:
@@ -112,9 +112,9 @@ def buildFilePathDBByTags(con, srcDir, tags, fRecursive=True):
     con.commit()
 
 
-def printSeries(cur, select_tags, print_tags, valueListDict, cond=None, filename=None):
+def printSeries(cur, tags, valueListDict, cond=None, filename=None):
 
-    if len(select_tags) == 0:
+    if len(tags) == 0:
         cur.execute('SELECT path FROM dicom WHERE ' + cond)
         paths = cur.fetchall()
         if len(paths) == 0:
@@ -131,35 +131,21 @@ def printSeries(cur, select_tags, print_tags, valueListDict, cond=None, filename
             print("Error: Invalid DICOM file: " + path)
             return None
 
-        #nSlices = len(filelist)
-        #seriesDescription       = dataset['0008103e'].value # (0008,103e) : SeriesDescription
-        #patientsName            = dataset['00100010'].value # (0010,0010) : PatientsName
-        #studyID                 = dataset['00200010'].value # (0020,0010) : StudyID
-        #seriesNumber            = dataset['00200011'].value # (0020,0011) : SeriesNumber
-        #imageOrientationPatient = dataset['00200037'].value # (0020,0037) : ImageOrientationPatient
-        #acquisitionTime         = dataset['00080032'].value # (0008,0032) : AcquisitionTime
-        #print('%s: %s\t%s\t%s\t%d' % (seriesNumber, seriesDescription, imageOrientationPatient, acquisitionTime, nSlices))
-        output_txt = ''
-        for tag in print_tags:
-            key = tag.replace(',', '')
-            try:
-                value = dataset[key].value
-            except KeyError:
-                value = None
-            if value:
-                if output_txt != '':
-                    output_txt = output_txt + ', ' + str(value)
-                else:
-                    output_txt = value
-        print(output_txt)
-        
+        nSlices = len(filelist)
+        seriesDescription       = dataset['0008103e'].value # (0008,103e) : SeriesDescription
+        patientsName            = dataset['00100010'].value # (0010,0010) : PatientsName
+        studyID                 = dataset['00200010'].value # (0020,0010) : StudyID
+        seriesNumber            = dataset['00200011'].value # (0020,0011) : SeriesNumber
+        imageOrientationPatient = dataset['00200037'].value # (0020,0037) : ImageOrientationPatient
+        acquisitionTime         = dataset['00080032'].value # (0008,0032) : AcquisitionTime
+        print('%s: %s\t%s\t%s\t%d' % (seriesNumber, seriesDescription, imageOrientationPatient, acquisitionTime, nSlices))
         return
 
     # Note: We add prefix 'x' to the DICOM tag as the DICOM tags are recognized as intenger
     #       by SQLight
-    tag = 'x' + select_tags[0].replace(',', '')
+    tag = 'x' + tags[0].replace(',', '')
     values = list(valueListDict[tag])
-    select_tags2 = select_tags[1:]
+    tags2 = tags[1:]
     
     for tp in values:
         value = tp[0]
@@ -173,31 +159,28 @@ def printSeries(cur, select_tags, print_tags, valueListDict, cond=None, filename
             filename2 = 'OUT-' + value
         else:
             filename2 = filename + '-' + value
-        printSeries(cur, select_tags2, print_tags, valueListDict, cond2, filename2)
+        printSeries(cur, tags2, valueListDict, cond2, filename2)
 
 
 #
 # The function to convert DICOM files to NRRD files
 #
-def listDicomBySubdirectory(srcdir, print_tags):
+def listDicomBySubdirectory(srcdir, tags):
     
     con = sqlite3.connect(':memory:')
     #con = sqlite3.connect('TestDB.db')
     cur = con.cursor()
-
-    # Group by patient, study, and series
-    select_tags = ['00100020', '00200010', '00200011']
     
-    buildFilePathDBByTags(con, srcdir, select_tags, True)
+    buildFilePathDBByTags(con, srcdir, tags, True)
      
     # Generate a list of values for each tag
     valueListDict = {}
-    for tag in select_tags:
+    for tag in tags:
         colName = 'x' + tag.replace(',', '')
         cur.execute('SELECT ' + colName + ' FROM dicom GROUP BY ' + colName)
         valueListDict[colName] = cur.fetchall()
     
-    printSeries(cur, select_tags, print_tags, valueListDict, None, None)
+    printSeries(cur, tags, valueListDict, None, None)
     
 
 def main(argv):
