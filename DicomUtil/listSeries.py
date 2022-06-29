@@ -138,7 +138,7 @@ def printSeries(cur, tags, valueListDict, cond=None, filename=None):
         seriesNumber            = dataset['00200011'].value # (0020,0011) : SeriesNumber
         imageOrientationPatient = dataset['00200037'].value # (0020,0037) : ImageOrientationPatient
         acquisitionTime         = dataset['00080032'].value # (0008,0032) : AcquisitionTime
-        print('%s: %s\t%s\t%s\t%d\n' % (seriesNumber, seriesDescription, imageOrientationPatient, acquisitionTime, nSlices))
+        print('%s: %s\t%s\t%s\t%d' % (seriesNumber, seriesDescription, imageOrientationPatient, acquisitionTime, nSlices))
         return
 
     # Note: We add prefix 'x' to the DICOM tag as the DICOM tags are recognized as intenger
