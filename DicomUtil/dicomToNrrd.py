@@ -225,6 +225,8 @@ def exportNrrd(filelist, dst=None, filename=None):
         return e['sliceLocation']
 
     slices.sort(key=keyfunc)
+    if int(slices[0]['instanceNumber']) >  int(slices[-1]['instanceNumber']):
+        slices.sort(reverse=True, key=keyfunc)
 
     # Generate a 3D matrix
     data = np.array([])
@@ -232,6 +234,7 @@ def exportNrrd(filelist, dst=None, filename=None):
     data = np.atleast_3d(np.transpose(slices[0]['pixelArray']))
     for sl in slices[1:]:
         data = np.append(data, np.atleast_3d(np.transpose(sl['pixelArray'])), axis=2)
+        print(str(sl['sliceLocation']) + ' ' + str(sl['instanceNumber']))
 
     # data = data.reshape((slices[0]['columns'], slices[0]['rows'], len(slices)))
 
@@ -245,7 +248,7 @@ def exportNrrd(filelist, dst=None, filename=None):
     spacing = np.append(spacing, sliceSpacing)
 
     norm = slices[0]['orientation'].reshape((2,3))
-    norm = np.append(norm, np.cross(norm[0], norm[1]).reshape((1,3)), axis=0)
+    norm = np.append(norm, np.cross(norm[1],norm[0]).reshape((1,3)), axis=0)
     norm = np.transpose(norm)
 
     header = {}
@@ -296,7 +299,7 @@ def removeDicomTags(dataset, tagsExcluded):
                 removeDicomTags(ds, tagsExcluded)
 
     # Top level
-    for etag in dicomTagsExcluded:
+    for etag in tagsExcluded:
         if etag in dataset:
             del dataset[etag]
 
@@ -319,7 +322,7 @@ def addImageToList(imageList, filename, dicomList):
 
     # Remove DICOM tags that are on the exclude list
     # removeDicomTags processes child sequences recursively
-    removeDicomTags(dataset, tagsExcluded)
+    removeDicomTags(dataset, dicomTagsExcluded)
 
     newDict = {}
     for key in dataset.keys():
