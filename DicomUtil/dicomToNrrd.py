@@ -220,35 +220,59 @@ def exportNrrd(filelist, dst=None, filename=None):
 
         slices.append(sl)
 
+    sliceSpacing = sl['sliceThickness']  # for a single slice image
+
+    # Take one slice and compuate the normal vector
+    sl_ori = slices[0]['orientation'].reshape((2,3))
+    sl_norm = -np.cross(sl_ori[0],sl_ori[1]).reshape((1,3))
+
     # Sort the slices
     def keyfunc(e):
-        return e['sliceLocation']
+        return e['instanceNumber']
+        #return e['sliceLocation']
 
-    slices.sort(key=keyfunc)
-    if int(slices[0]['instanceNumber']) >  int(slices[-1]['instanceNumber']):
-        slices.sort(reverse=True, key=keyfunc)
+    slices.sort(reverse=False, key=keyfunc)
+
+    if len(slices) > 1:                  # for a multi-slice image
+        n = (slices[1]['position'] - slices[0]['position']).reshape((1,3))
+        sl_sp = np.linalg.norm(n)
+        n = n / sl_sp
+        #print(n)
+        if np.inner(sl_norm, n) > 0: # Opposite from the normal vector of the slice
+            slices.sort(reverse=True, key=keyfunc)
+            sl_norm = -sl_norm
+
+        # Make sure that the slicers are equally spaced
+        psl = slices[1]
+        for sl in slices[2:]:
+            d = np.linalg.norm(sl['position'] - psl['position']) - sl_sp
+            if np.abs(d) > 0.0001:
+                print('Skipping ' +  str(filename) + ' : Slices are not equally spaced.')
+                return None
+            psl = sl
+
+        sliceSpacing = slices[1]['sliceLocation'] - slices[0]['sliceLocation']
 
     # Generate a 3D matrix
     data = np.array([])
 
     data = np.atleast_3d(np.transpose(slices[0]['pixelArray']))
-    for sl in slices[1:]:
-        data = np.append(data, np.atleast_3d(np.transpose(sl['pixelArray'])), axis=2)
-        print(str(sl['sliceLocation']) + ' ' + str(sl['instanceNumber']))
 
-    # data = data.reshape((slices[0]['columns'], slices[0]['rows'], len(slices)))
-
-    seriesNumber = dataset['00200011'].value  # (0020,0011) : SeriesNumber
-
-    sliceSpacing = sl['sliceThickness']  # for a single slice image
-    if len(slices) > 1:                  # for a multi-slice image
-        sliceSpacing = slices[1]['sliceLocation'] - slices[0]['sliceLocation']
+    print(data.shape)
+    if len(slices) > 1:
+        for sl in slices[1:]:
+            data = np.append(data, np.atleast_3d(np.transpose(sl['pixelArray'])), axis=2)
+            print(str(sl['sliceLocation']) + ' ' + str(sl['instanceNumber']) + ' ' + str(sl['position']))
+    print(data.shape)
+    #data = np.flip(data, axis=2)
+    #data = data.reshape((slices[0]['columns'], slices[0]['rows'], len(slices)))
 
     spacing = slices[0]['spacing']
     spacing = np.append(spacing, sliceSpacing)
 
     norm = slices[0]['orientation'].reshape((2,3))
-    norm = np.append(norm, np.cross(norm[1],norm[0]).reshape((1,3)), axis=0)
+    print(norm)
+    norm = np.append(norm, sl_norm, axis=0)
     norm = np.transpose(norm)
 
     header = {}
@@ -270,6 +294,7 @@ def exportNrrd(filelist, dst=None, filename=None):
     header['kinds']    = ['domain', 'domain', 'domain']
     header['encoding'] = 'raw'
 
+    seriesNumber            = dataset['00200011'].value  # (0020,0011) : SeriesNumber
     seriesDescription       = dataset['0008103e'].value  # (0008,103e) : SeriesDescription
     patientsName            = dataset['00100010'].value  # (0010,0010) : PatientsName
     studyID                 = dataset['00200010'].value  # (0020,0010) : StudyID
