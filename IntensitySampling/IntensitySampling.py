@@ -3,10 +3,7 @@
 # 
 # Usage: On the Slicer's Python interactor, 
 #
-#   >>> execfile('/path/to/script/IntensitySampling.py')
-# or, if execfile() is not available,
 #   >>> exec(open('/path/to/script/IntensitySampling.py').read())
-# then
 #   >>> IntensitySampling(imageListFile, sourceDir, outputFile)
 #      
 # Arguements:
