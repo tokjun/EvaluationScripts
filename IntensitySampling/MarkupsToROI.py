@@ -81,3 +81,5 @@ def markupsToROI(markups_node_name, volume_node_name, label_node_name, roi_size,
     matrix = vtk.vtkMatrix4x4()
     volume_node.GetIJKToRASMatrix(matrix)
     label_node.SetIJKToRASMatrix(matrix)
+
+
