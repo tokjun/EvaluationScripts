@@ -8,6 +8,7 @@ import sqlite3
 import pydicom
 import nrrd
 import json
+import csv
 
 
 #  Usage:
@@ -67,11 +68,11 @@ dicomTagsExcluded = [
     '00191013',  # (0019, 1013) [ImaAbsTablePosition]
     '00191014',  # (0019, 1014) [ImaRelTablePosition]
     '00191015',  # (0019, 1015) [SlicePosition_PCS]
-    '00200032',  # (0020, 0032) Image Position (Patient)
-    '00200037',  # (0020, 0037) Image Orientation (Patient)
+    #'00200032',  # (0020, 0032) Image Position (Patient)
+    #'00200037',  # (0020, 0037) Image Orientation (Patient)
     '00200052',  # (0020, 0052) Frame of Reference UID
     '00201040',  # (0020, 1040) Position Reference Indicator
-    '00201041',  # (0020, 1041) Slice Location
+    #'00201041',  # (0020, 1041) Slice Location
     '00200013',  # (0020, 0013) InstanceNumber -- image number
     '00321032',  # (0032, 1032) Requesting Physician                PN: 'TUNCALI^KEMAL^^^MD'
     '00321060',  # (0032, 1060) Requested Procedure Description     LO: 'AMIGO MRI (RAD-LED)'
@@ -112,6 +113,8 @@ def getDICOMAttribute(path, tags):
         if key in dataset:
             element = dataset[key]
             value = element.value
+            value = str(value).replace(',', ' ')
+            value = str(value).replace('\'', '')
 
         if insertStr == '':
             insertStr = "'" + str(value) + "'"
@@ -175,8 +178,10 @@ def buildFilePathDBByTags(con, srcDir, tags, fRecursive=True):
     con.commit()
 
 
-def exportNrrd(filelist, dst=None, filename=None):
+def exportNrrd(filelist, dst=None, filename=None, slice_tol=0.0001, dump_spacings=False):
     # Obtain the image info from the first image
+    # slice_tol is used to determin whether the slices are equally spaced or not.
+    # If dump_spacing==True, it dumps the spacing on the console
 
     nSlices = len(filelist)
 
@@ -208,6 +213,7 @@ def exportNrrd(filelist, dst=None, filename=None):
                 'sliceLocation'  : dataset['00201041'].value, # SliceLocation
                 'bitsAllocated'  : dataset['00280100'].value, # BitsAllocated
                 'instanceNumber' : dataset['00200013'].value, # InstanceNumber -- image number
+                'acquisitionTime': dataset['00080032'].value, # Acquisition time
                 }
         except KeyError:
             print('KeyError: Missing geometric information. Skipping.')
@@ -244,12 +250,27 @@ def exportNrrd(filelist, dst=None, filename=None):
 
         # Make sure that the slicers are equally spaced
         psl = slices[1]
+        reject = False
         for sl in slices[2:]:
             d = np.linalg.norm(sl['position'] - psl['position']) - sl_spacing
-            if np.abs(d) > 0.0001:
-                print('Skipping ' +  str(filename) + ' : Slices are not equally spaced.')
-                return None
+            if np.abs(d) > slice_tol:
+                print('Skipping ' +  str(filename) + ' : Slices are not equally spaced. (Error = ' + str(d) + ' mm)')
+                reject = True
             psl = sl
+
+        # Output spacing
+        if dump_spacings:
+            ts = slices[0]['acquisitionTime']
+            msg = 'SPACING: ' + str(filename) + ' : ' + str(ts)
+            psl = slices[0]
+            for sl in slices[1:]:
+                d = np.linalg.norm(sl['position'] - psl['position'])
+                msg = msg + ', ' + str(d)
+                psl = sl
+            print(msg)
+
+        if reject:
+            return None
 
         sliceSpacing = sl_spacing
         #sliceSpacing = slices[1]['sliceLocation'] - slices[0]['sliceLocation']
@@ -352,7 +373,7 @@ def addImageToList(imageList, filename, dicomList):
     imageList[filename] = newDict
 
 
-def groupBySeriesAndExport(cur, tags, valueListDict, cond=None, filename=None, dst=None, prefix=None, imageList=None):
+def groupBySeriesAndExport(cur, tags, valueListDict, cond=None, filename=None, dst=None, prefix=None, imageList=None, slice_tol=0.0001, dump_spacings=False):
 
     if len(tags) == 0:
         cur.execute('SELECT path FROM dicom WHERE ' + cond)
@@ -364,7 +385,7 @@ def groupBySeriesAndExport(cur, tags, valueListDict, cond=None, filename=None, d
             filelist.append(str(p[0]))
 
         print('Writing ' + dst + '/' + filename)
-        filenameUsed = exportNrrd(filelist, dst, filename)
+        filenameUsed = exportNrrd(filelist, dst, filename, slice_tol=slice_tol, dump_spacings=dump_spacings)
 
         if (filenameUsed is not None) and (imageList is not None):
             addImageToList(imageList, filenameUsed, filelist)
@@ -390,7 +411,7 @@ def groupBySeriesAndExport(cur, tags, valueListDict, cond=None, filename=None, d
             filename2 = value.replace('/', '.')
         else:
             filename2 = filename + '-' + value.replace('/', '.')
-        groupBySeriesAndExport(cur, tags2, valueListDict, cond2, filename2, dst=dst, imageList=imageList)
+        groupBySeriesAndExport(cur, tags2, valueListDict, cond2, filename2, dst=dst, imageList=imageList, slice_tol=slice_tol, dump_spacings=dump_spacings)
 
 
 def main(argv):
@@ -409,6 +430,11 @@ def main(argv):
         parser.add_argument('-l', dest='imagelist', action='store_const',
                             const=True, default=False,
                             help='generate a image list with DICOM parameters.')
+        parser.add_argument('-s', dest='dump_spacings', action='store_const',
+                            const=True, default=False,
+                            help='generate a image list with DICOM parameters.')
+        parser.add_argument('-t', dest='tol', default=0.0001, help='Tolerance for slice spacing inconsistency (mm)')
+        parser.add_argument('-c', dest='csv', default=None, help='CSV file for the table of DICOM tag data')
         args = parser.parse_args(argv)
 
     except Exception as e:
@@ -417,12 +443,20 @@ def main(argv):
     tags   = args.tags
     srcdir = args.src[0]
     dstdir = args.dst[0]
+    slice_tol = float(args.tol)
+    csv_file = args.csv
+    dump_spacings = args.dump_spacings
 
     con = sqlite3.connect(':memory:')
     #con = sqlite3.connect('TestDB.db')
     cur = con.cursor()
 
-    buildFilePathDBByTags(con, srcdir, tags, True)
+    tags_db = tags
+    #tags_db.append('0008,0032')
+    #tags_db.append('0008,0008')
+
+    buildFilePathDBByTags(con, srcdir, tags_db, True)
+
 
     # Generate a list of values for each tag
     valueListDict = {}
@@ -431,10 +465,26 @@ def main(argv):
         cur.execute('SELECT ' + colName + ' FROM dicom GROUP BY ' + colName)
         valueListDict[colName] = cur.fetchall()
 
+
+    # Export the entire DB to output_file.csv
+    if csv_file:
+        cur.execute('SELECT * FROM dicom')
+
+        with open(csv_file, 'w', newline='') as csv_file:
+            writer = csv.writer(csv_file)
+
+            # Write headers
+            column_names = [description[0] for description in cur.description]
+            writer.writerow(column_names)
+
+            # Write data rows
+            writer.writerows(cur.fetchall())
+
+
     os.makedirs(dstdir, exist_ok=True)
 
     d = {}
-    groupBySeriesAndExport(cur, tags, valueListDict, cond=None, filename=None, dst=dstdir, imageList=d)
+    groupBySeriesAndExport(cur, tags, valueListDict, cond=None, filename=None, dst=dstdir, imageList=d, slice_tol=slice_tol, dump_spacings=dump_spacings)
 
     with open(dstdir+'/'+'tags.json', 'w', encoding='utf8') as json_file:
         json.dump(d, json_file, ensure_ascii=False)
